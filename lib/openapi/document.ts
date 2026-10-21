@@ -173,6 +173,56 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/v1/protocols/health": {
+      get: {
+        operationId: "getProtocolHealth",
+        summary: "Composite protocol health scorecards",
+        description:
+          "Per-protocol operations, wallets, native volume, and TVL components with a 0–100 score. Missing inputs, including TVL, are marked unavailable and dropped from the weighted sum.",
+        parameters: [
+          {
+            name: "period",
+            in: "query",
+            required: false,
+            schema: { $ref: "#/components/schemas/Period" },
+          },
+          {
+            name: "network",
+            in: "query",
+            required: false,
+            schema: { type: "string", enum: ["mainnet", "testnet"], default: "mainnet" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Scored protocols for the period",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ProtocolHealthResponse" },
+              },
+            },
+          },
+          "400": {
+            description: "Invalid period, network, or data source",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/ApiError" } },
+            },
+          },
+          "429": {
+            description: "Rate limit exceeded",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/RateLimitError" } },
+            },
+          },
+          "500": {
+            description: "Upstream or validation failure",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/ApiError" } },
+            },
+          },
+        },
+      },
+    },
     "/api/health": {
       get: {
         operationId: "getHealth",
@@ -320,6 +370,49 @@ export const openApiDocument = {
           metricProvenance: { type: "object", additionalProperties: true },
         },
         additionalProperties: true,
+      },
+      ProtocolHealthResponse: {
+        type: "object",
+        required: ["period", "source", "displayLimit", "methodology", "protocols"],
+        properties: {
+          period: { $ref: "#/components/schemas/Period" },
+          source: { type: "string", enum: ["hubble", "fixture"] },
+          fixture: { type: "boolean" },
+          displayLimit: { type: "integer" },
+          methodology: {
+            type: "object",
+            required: ["version", "href", "weights", "missingInput"],
+            properties: {
+              version: { type: "string" },
+              href: { type: "string" },
+              weights: { type: "object", additionalProperties: { type: "number" } },
+              missingInput: { type: "string" },
+            },
+          },
+          protocols: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["protocol", "rank", "score", "components", "detail"],
+              properties: {
+                protocol: { type: "string" },
+                rank: { type: "integer" },
+                score: { type: ["number", "null"] },
+                components: { type: "object", additionalProperties: true },
+                timeseries: { type: "array", items: { type: "number" } },
+                detail: {
+                  type: "object",
+                  required: ["context", "href"],
+                  properties: {
+                    context: { type: "string", enum: ["protocol", "entity"] },
+                    href: { type: "string" },
+                    entityId: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
       HealthResponse: {
         type: "object",

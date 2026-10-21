@@ -12,6 +12,7 @@ import { FlowEgoSection } from "@/components/dashboard/FlowEgoSection";
 import { NetworkTreemap } from "@/components/dashboard/NetworkTreemap";
 import { FlowView } from "@/components/dashboard/FlowView";
 import { ProtocolBarChart } from "@/components/dashboard/ProtocolBarChart";
+import { ProtocolHealthScorecards } from "@/components/dashboard/ProtocolHealthScorecards";
 
 import { TimeSeriesChart } from "@/components/dashboard/TimeSeriesChart";
 import { ActivityHeatmap } from "@/components/dashboard/ActivityHeatmap";
@@ -94,6 +95,8 @@ function DashboardContent() {
 
       {/* KPIs - quick overview */}
       <KpiCards />
+
+      <ProtocolHealthScorecards />
 
       {/* Primary visualization */}
       <div

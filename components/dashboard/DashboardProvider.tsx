@@ -165,6 +165,8 @@ export function DashboardProvider({
   const [comparePeriod, setComparePeriod] = useState<Period | null>(null);
   const [treemapView, setTreemapViewState] = useState<TreemapViewId>("events");
   const [chartView, setChartViewState] = useState<ChartViewId>("treemap");
+  const [visualization, setVisualization] = useState<"treemap" | "flow">("treemap");
+  const [searchQuery, setSearchQuery] = useState("");
   const [metric, setMetricState] = useState<DashboardMetricId>("ops");
   const [network, setNetworkState] =
     useState<import("@/lib/network").DashboardNetworkId>("mainnet");
@@ -197,6 +199,8 @@ export function DashboardProvider({
       if (parsed.network) setNetworkState(parsed.network);
       if (parsed.flowMode) setFlowMode(parsed.flowMode);
       if (parsed.egoAddress) setEgoAddress(parsed.egoAddress);
+      const query = new URLSearchParams(window.location.search).get("q");
+      if (query) setSearchQuery(query);
       setUrlReady(true);
     });
   }, [flowViewEnabled]);
@@ -298,7 +302,7 @@ export function DashboardProvider({
         `${window.location.pathname}${next}`,
       );
     }
-  }, [urlReady, period, metric, treemapView, activeLevelPath, comparePeriod, network, flowMode, egoAddress]);
+  }, [urlReady, period, metric, treemapView, chartView, visualization, searchQuery, activeLevelPath, comparePeriod, network, flowMode, egoAddress]);
 
   const selectSearchResult = useCallback(
     (result: SearchResult) => {

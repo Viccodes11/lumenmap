@@ -178,6 +178,9 @@ export const USD_ASSET_UNIT = {
   },
 } as const satisfies MetricUnit<"asset_volume">;
 
+/** Treemap builders refer to this Circle USDC unit by this name. */
+export const USDC_ASSET_UNIT = USD_ASSET_UNIT;
+
 export interface UsdcCategoryRow {
   type_string: string;
   amount: number;
