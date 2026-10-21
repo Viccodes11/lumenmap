@@ -238,6 +238,19 @@ Activity responses use a pluggable cache driver selected by env:
 
 `CACHE_BACKEND=redis` uses a Redis/KV-compatible driver with stable `lumenmap:cache:*` keys. In development, if an external client is unavailable the process falls back to in-memory. Inject a real client via `setRedisClient()` (tests use a shared fake driver to prove cross-instance hits). Hit/miss telemetry from `#97` continues to flow through `getCached(..., { track: true })`.
 
+### Research snapshots
+
+`POST /api/v1/snapshots` stores a bounded JSON snapshot of the current research view: `period`, `metric`, `view`, `selectedNodes`, and the KPI payload. The server adds a short opaque id, `generatedAt`, `expiresAt`, and a SHA-256 `kpiPayloadHash`. `GET /api/v1/snapshots/:id` returns that frozen payload. The dashboard opens it at `/s/:id` in read-only mode and renders KPIs plus the treemap selection from the snapshot, without a live activity requery for those fields.
+
+Storage is an in-memory map in the Node process. It does not write files and does not call Hubble, so fixture mode can create and open snapshots with no GCP credentials. Entries disappear on process restart and are not shared across instances.
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `SNAPSHOT_TTL_SECONDS` | `604800` | Lifetime in seconds (7 days). Expired and unknown ids return 404. |
+| `SNAPSHOT_MAX_BYTES` | `65536` | Maximum UTF-8 POST body size. Larger bodies return 413. |
+
+The snapshot page shows `Frozen research view · generatedAt …`. A missing or expired id shows an empty state instead of the dashboard.
+
 ### `GET /api/v1/activity`
 
 Compact visualization-ready activity data used by the dashboard. This response

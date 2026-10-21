@@ -93,6 +93,7 @@ export type DashboardUrlState = {
   network?: "mainnet" | "testnet";
   flowMode?: "graph" | "table";
   egoAddress?: string;
+  searchQuery?: string;
 };
 
 export function parseDashboardUrlSearch(
