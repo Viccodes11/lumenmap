@@ -178,12 +178,11 @@ export function DashboardProvider({
     snapshot && snapshot.view !== "flow" ? snapshot.view : "events",
   );
   const [chartView, setChartViewState] = useState<ChartViewId>("treemap");
-  const [metric, setMetricState] = useState<DashboardMetricId>(
-    snapshot?.metric ?? "ops",
-  );
-  const [network, setNetworkState] = useState<
-    import("@/lib/network").DashboardNetworkId
-  >(snapshot?.network ?? "mainnet");
+  const [visualization, setVisualization] = useState<"treemap" | "flow">("treemap");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [metric, setMetricState] = useState<DashboardMetricId>("ops");
+  const [network, setNetworkState] =
+    useState<import("@/lib/network").DashboardNetworkId>("mainnet");
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [activeLevelPath, setActiveLevelPath] = useState<TreemapNode[]>([]);
   const [focusRequest, setFocusRequest] = useState<SearchResult | null>(null);
@@ -229,6 +228,8 @@ export function DashboardProvider({
       if (parsed.network) setNetworkState(parsed.network);
       if (parsed.flowMode) setFlowMode(parsed.flowMode);
       if (parsed.egoAddress) setEgoAddress(parsed.egoAddress);
+      const query = new URLSearchParams(window.location.search).get("q");
+      if (query) setSearchQuery(query);
       setUrlReady(true);
     });
   }, [flowViewEnabled, readOnly]);
@@ -340,7 +341,7 @@ export function DashboardProvider({
         `${window.location.pathname}${next}`,
       );
     }
-  }, [urlReady, readOnly, period, metric, treemapView, activeLevelPath, comparePeriod, network, flowMode, egoAddress, chartView, searchQuery, visualization]);
+  }, [urlReady, period, metric, treemapView, chartView, visualization, searchQuery, activeLevelPath, comparePeriod, network, flowMode, egoAddress]);
 
   const selectSearchResult = useCallback(
     (result: SearchResult) => {

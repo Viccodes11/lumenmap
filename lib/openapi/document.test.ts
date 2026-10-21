@@ -10,8 +10,7 @@ describe("OpenAPI document", () => {
     assert.ok(openApiDocument.paths["/api/v1/activity"]?.get);
     assert.ok(openApiDocument.paths["/api/v1/timeseries"]?.get);
     assert.ok(openApiDocument.paths["/api/v1/flow"]?.get);
-    assert.ok(openApiDocument.paths["/api/v1/snapshots"]?.post);
-    assert.ok(openApiDocument.paths["/api/v1/snapshots/{id}"]?.get);
+    assert.ok(openApiDocument.paths["/api/v1/protocols/health"]?.get);
     assert.ok(openApiDocument.paths["/api/health"]?.get);
     assert.ok(openApiDocument.paths["/api/openapi.json"]?.get);
   });

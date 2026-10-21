@@ -3,6 +3,14 @@ import {
   METHODOLOGY_SECTIONS,
   METHODOLOGY_VERSION,
 } from "@/lib/metrics/methodology";
+import {
+  PROTOCOL_HEALTH_COMPONENT_LABELS,
+  PROTOCOL_HEALTH_DISPLAY_LIMIT,
+  PROTOCOL_HEALTH_METHODOLOGY_VERSION,
+  PROTOCOL_HEALTH_UNITS,
+  PROTOCOL_HEALTH_WEIGHTS,
+  PROTOCOL_HEALTH_COMPONENTS,
+} from "@/lib/protocol-health/constants";
 import { FLOW_METHODOLOGY_ANCHORS } from "@/lib/metrics/flow-methodology-anchors";
 
 const FLOW_SUBSECTIONS = [
@@ -53,6 +61,14 @@ export default function MethodologyPage() {
               </a>
             </li>
           ))}
+          <li>
+            <a
+              href="#protocol-health"
+              className="text-zinc-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stellar rounded-sm"
+            >
+              Protocol health score
+            </a>
+          </li>
           <li>
             <a
               href={`#${FLOW_METHODOLOGY_ANCHORS.flow}`}
@@ -133,6 +149,99 @@ export default function MethodologyPage() {
             </div>
           </section>
         ))}
+
+        <section
+          id="protocol-health"
+          className="scroll-mt-24 space-y-4 rounded-xl border border-white/10 bg-black/20 p-5"
+        >
+          <h2 className="text-xl font-semibold text-white">
+            Protocol health score
+          </h2>
+          <p className="text-sm leading-relaxed text-zinc-300">
+            Protocol health is a descriptive 0–100 composite of four measured
+            inputs for the selected period. It is methodology v
+            {PROTOCOL_HEALTH_METHODOLOGY_VERSION}. The dashboard shows the top{" "}
+            {PROTOCOL_HEALTH_DISPLAY_LIMIT} protocols after the full cohort has
+            been scored. <code className="font-mono text-xs">GET /api/v1/protocols/health</code>{" "}
+            returns every scored protocol, each component, and the composite.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[28rem] text-left text-sm text-zinc-300">
+              <thead>
+                <tr className="border-b border-white/10 text-xs text-zinc-500">
+                  <th className="py-2 pr-3 font-medium">Component</th>
+                  <th className="py-2 pr-3 font-medium">Weight</th>
+                  <th className="py-2 pr-3 font-medium">Unit</th>
+                  <th className="py-2 font-medium">Input</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PROTOCOL_HEALTH_COMPONENTS.map((id) => (
+                  <tr key={id} className="border-b border-white/5">
+                    <td className="py-2 pr-3">{PROTOCOL_HEALTH_COMPONENT_LABELS[id]}</td>
+                    <td className="py-2 pr-3 tabular-nums">{PROTOCOL_HEALTH_WEIGHTS[id]}</td>
+                    <td className="py-2 pr-3">{PROTOCOL_HEALTH_UNITS[id]}</td>
+                    <td className="py-2 text-zinc-400">
+                      {id === "ops" && "Closed operations attributed to the protocol"}
+                      {id === "wallets" && "Distinct labeled accounts and contracts"}
+                      {id === "volume" && "Native XLM volume on attributed accounts"}
+                      {id === "tvl" && "Existing protocol TVL adapter snapshot, USD"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="space-y-2 text-sm text-zinc-300">
+            <h3 className="text-base font-semibold text-white">Formula</h3>
+            <ol className="list-decimal space-y-1 pl-4">
+              <li>
+                Ignore the unlabeled <span className="font-mono text-xs">unknown</span> bucket.
+              </li>
+              <li>
+                For each component, keep only protocols with a measured,
+                non-negative number. Min-max normalize those values to 0–100.
+                If every measured value is equal, a positive value scores 100
+                and a zero scores 0. Round each component score to one decimal.
+              </li>
+              <li>
+                Composite = the weighted sum of the rounded component scores
+                that are available, divided by the sum of those weights. Round
+                the result to one decimal and clamp it to 0–100.
+              </li>
+              <li>
+                If every component is unavailable, the composite is null. It is
+                not reported as 0.
+              </li>
+            </ol>
+          </div>
+          <div className="space-y-2 text-sm text-zinc-300">
+            <h3 className="text-base font-semibold text-white">Missing inputs</h3>
+            <p>
+              A component with no measurement is <span className="font-mono text-xs">unavailable</span>.
+              Its value and component score are null, and its weight is removed
+              from the denominator. Missing TVL therefore does not zero the
+              rest of the score. A measured zero stays in the cohort and can
+              sit at the bottom of that component. Failed or unsupported TVL
+              adapters count as missing; partial and stale snapshots still
+              contribute the USD they already report. This score does not
+              change how TVL itself is calculated.
+            </p>
+          </div>
+          <div className="space-y-2 text-sm text-zinc-300">
+            <h3 className="text-base font-semibold text-white">Non-goals</h3>
+            <ul className="list-disc space-y-1 pl-4">
+              <li>No reputation, social, or team-quality signal is included.</li>
+              <li>The score is not a solvency, safety, or investment rating.</li>
+              <li>It does not replace operations, volume, or TVL as standalone metrics.</li>
+              <li>Core TVL methodology, pricing, and double-counting rules are unchanged.</li>
+              <li>
+                Fixture mode serves a static sample of at least three protocols
+                and does not query Hubble.
+              </li>
+            </ul>
+          </div>
+        </section>
 
         <section
           id={FLOW_METHODOLOGY_ANCHORS.flow}

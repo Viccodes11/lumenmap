@@ -105,6 +105,8 @@ export function NetworkTreemap() {
     activeLevelPath,
     setActiveLevelPath,
   } = useDashboard();
+  const isFlowView = chartView === "flow" && flowViewEnabled;
+  const chartPanelId = "network-chart-panel";
   const [excludedCategories, setExcludedCategories] = useState<Set<string>>(
     new Set(),
   );
