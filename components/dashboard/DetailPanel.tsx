@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboard } from "@/components/dashboard/DashboardProvider";
 import { isEligibleAddress } from "@/lib/clipboard";
 import { buildContractFunctionBreakdown } from "@/lib/entities/contract-function-breakdown";
+import { ContractFunctionBarChart } from "@/components/dashboard/ContractFunctionBarChart";
 import { getMetricUnit } from "@/lib/metrics/units";
 import { formatNumber, formatPercent } from "@/lib/utils";
 
@@ -246,75 +247,31 @@ export function DetailPanel({ onViewFlow }: { onViewFlow?: (account: string) => 
                 Soroban functions when data is present.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[16rem] border-collapse text-left text-sm">
-                  <caption className="sr-only">
-                    Top {functionBreakdown.configuredLimit} Soroban host
-                    functions for this contract, with operation counts and share
-                    of the contract total ({opsUnitLabel}).
-                  </caption>
-                  <thead>
-                    <tr className="border-b border-white/10 text-xs text-zinc-500">
-                      <th scope="col" className="py-1.5 pr-2 font-medium">
-                        Function
-                      </th>
-                      <th scope="col" className="py-1.5 pr-2 font-medium">
-                        Ops ({opsUnitLabel})
-                      </th>
-                      <th scope="col" className="py-1.5 pr-2 font-medium">
-                        Share
-                      </th>
-                      <th scope="col" className="py-1.5 font-medium">
-                        Treemap
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {functionBreakdown.rows.map((row) => (
-                      <tr
-                        key={row.eventType}
-                        className="border-b border-white/5 text-zinc-200"
-                      >
-                        <th
-                          scope="row"
-                          className="py-1.5 pr-2 font-mono text-xs font-normal"
-                        >
-                          {row.functionName}
-                        </th>
-                        <td className="py-1.5 pr-2 tabular-nums">
-                          {formatNumber(row.opCount)}
-                        </td>
-                        <td className="py-1.5 pr-2 tabular-nums">
-                          {formatPercent(row.sharePercent)}
-                        </td>
-                        <td className="py-1.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2 text-xs text-stellar-light"
-                            onClick={() => {
-                              setTreemapView("events");
-                              setActiveLevelPath(row.drillPath);
-                              const leaf =
-                                row.drillPath[row.drillPath.length - 1];
-                              setSelectedNode({
-                                name: leaf.name,
-                                value: Number(leaf.value ?? row.opCount),
-                                share:
-                                  leaf.meta?.share ?? row.sharePercent / 100,
-                                meta: leaf.meta,
-                              });
-                            }}
-                          >
-                            Open drill
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ContractFunctionBarChart
+                rows={functionBreakdown.rows}
+                configuredLimit={functionBreakdown.configuredLimit}
+                opsUnitLabel={opsUnitLabel}
+                onOpenDrill={(row) => {
+                  setTreemapView("events");
+                  setActiveLevelPath(row.drillPath);
+                  const leaf = row.drillPath[row.drillPath.length - 1];
+                  setSelectedNode({
+                    name: leaf.name,
+                    value: Number(leaf.value ?? row.opCount),
+                    share: leaf.meta?.share ?? row.sharePercent / 100,
+                    meta: leaf.meta,
+                  });
+                }}
+              />
             )}
+            <p className="mt-2 text-[11px] text-zinc-600">
+              Function names reflect the invoked method&apos;s symbol argument when
+              present; some invocations fall back to the raw operation type. See{" "}
+              <code className="rounded bg-black/30 px-1 py-0.5">
+                docs/contract-function-naming.md
+              </code>{" "}
+              for the full methodology and naming limits.
+            </p>
           </section>
         ) : null}
 
