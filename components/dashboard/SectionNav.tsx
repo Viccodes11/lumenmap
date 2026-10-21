@@ -8,6 +8,7 @@ const sections = [
   { href: "/overview", label: "Overview" },
   { href: "/treemap", label: "Treemap" },
   { href: "/flow", label: "Flow" },
+  { href: "/flow/corridors", label: "Corridors" },
 ];
 
 export function SectionNav() {
