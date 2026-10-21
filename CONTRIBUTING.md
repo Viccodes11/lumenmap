@@ -17,6 +17,7 @@ Thank you for your interest in contributing. This guide covers everything you ne
 - [Making changes](#making-changes)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Entity registry](#entity-registry)
+- [Issue sizing (Wave estimate guide)](#issue-sizing-wave-estimate-guide)
 - [Branch and PR workflow](#branch-and-pr-workflow)
 - [Pull request expectations](#pull-request-expectations)
 
@@ -319,6 +320,24 @@ An id with no registered factory, or with the environment variable unset, is a n
 ### Note on TVL methodology
 
 A live adapter that only reports a number from an external aggregator (like the DefiLlama example) does not follow the Hubble-native snapshot, pricing, and double-counting rules in [`docs/tvl-methodology.md`](docs/tvl-methodology.md) — that document describes a Stellar-ledger-derived adapter, which is tracked separately. Say so in the adapter's own doc comment if it doesn't.
+
+---
+
+## Issue sizing (Wave estimate guide)
+
+Every Stellar Wave issue should carry one `size:S`, `size:M`, or `size:L` label so contributors can gauge effort before picking one up. A maintainer (or the issue author) applies the label when the issue is filed or triaged.
+
+| Label | Typical shape | Signals |
+| --- | --- | --- |
+| `size:S` | A handful of files, one focused change | No BigQuery/schema change. No new route or subsystem. Little to no new a11y surface (editing an existing accessible component, not introducing one). Usually a helper, a docs update, or a small parsing/formatting fix. |
+| `size:M` | A new component, route, or panel plus its tests and docs | May touch one existing data path but doesn't change its contract. Introduces a bounded new a11y surface (one dialog, one chart, one toggle) that needs keyboard/labeling work. Typically the shape of a single self-contained Wave feature issue. |
+| `size:L` | A new subsystem, pipeline, or cross-cutting infra change | BigQuery/Hubble schema or query changes, new build tooling (Storybook, visual-regression baselines), or a feature whose a11y/testing surface spans multiple existing components. Expect more than one review round. |
+
+This is a judgment call, not a formula — intentionally no automated/ML sizing. When unsure, size up: a `size:M` issue that turns out small is a pleasant surprise; a `size:S` issue that turns out to need a schema change is a stalled PR.
+
+Size labels are independent of the `good first issue` label — a `size:S` issue is not automatically beginner-friendly if it requires deep familiarity with a specific subsystem (e.g. the Hubble query layer).
+
+`scripts/backfill-wave-size-labels.mjs` applies this guide to a batch of already-open `Stellar Wave` issues; see the script's header comment for usage and for the judgment notes behind each sizing decision it was seeded with.
 
 ---
 

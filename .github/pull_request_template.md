@@ -10,6 +10,8 @@
 
 Closes #
 
+- [ ] Size label present on the linked issue (`size:S` / `size:M` / `size:L` — see [Issue sizing](../CONTRIBUTING.md#issue-sizing-wave-estimate-guide)), or N/A if there is no linked issue
+
 ## Verification
 
 Commands supported by this repository (run what applies):
