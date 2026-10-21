@@ -29,6 +29,14 @@ import { SavedViewsControls } from "@/components/dashboard/SavedViewsControls";
 import { SnapshotBanner } from "@/components/dashboard/SnapshotBanner";
 import { SnapshotShareControls } from "@/components/dashboard/SnapshotShareControls";
 import { NetworkSelector } from "@/components/dashboard/NetworkSelector";
+import { AnomalyBanner } from "@/components/dashboard/AnomalyBanner";
+import { useEffect, useState } from "react";
+import {
+  detectKpiAnomalies,
+  QUIET_FIXTURE,
+  SPIKE_FIXTURE,
+  type KpiSnapshot,
+} from "@/lib/anomalies";
 import { TabbedSection } from "@/components/ui/tabbed-section";
 import {
   isMetricSupportedOnNetwork,
@@ -36,6 +44,43 @@ import {
   unsupportedMetricMessage,
 } from "@/lib/network";
 import type { ResearchSnapshot } from "@/lib/snapshots/types";
+
+function snapshotFromKpis(kpis: {
+  totalOps: { value: number };
+  activeWallets: { value: number };
+  sorobanShare: { value: number };
+}): KpiSnapshot {
+  return {
+    ops: kpis.totalOps.value,
+    activeWallets: kpis.activeWallets.value,
+    sorobanShare: kpis.sorobanShare.value,
+  };
+}
+
+function AnomalyBannerHost() {
+  const { data, comparisonData } = useDashboard();
+  const [forced, setForced] = useState<string | null>(null);
+
+  useEffect(() => {
+    setForced(new URLSearchParams(window.location.search).get("anomaly"));
+  }, []);
+
+  if (forced === "spike") {
+    return <AnomalyBanner findings={detectKpiAnomalies(SPIKE_FIXTURE)} />;
+  }
+  if (forced === "quiet") {
+    return <AnomalyBanner findings={detectKpiAnomalies(QUIET_FIXTURE)} />;
+  }
+
+  const complete = Boolean(data?.isPeriodComplete && comparisonData?.isPeriodComplete);
+  const findings = detectKpiAnomalies({
+    complete,
+    current: data ? snapshotFromKpis(data.kpis) : null,
+    baseline: comparisonData ? snapshotFromKpis(comparisonData.kpis) : null,
+  });
+
+  return <AnomalyBanner findings={findings} />;
+}
 
 function DashboardContent() {
   const { selectedNode, network, metric, setMetric, readOnly, snapshot } =
@@ -81,6 +126,7 @@ function DashboardContent() {
       ) : null}
 
       <FreshnessWarning />
+      <AnomalyBannerHost />
 
       <ActivityErrorBanner />
 
