@@ -122,6 +122,46 @@ accent fill.
 - `Badge`: uses accent-muted or surface-muted backgrounds depending on variant.
 - `Page canvas`: uses `bg-canvas` and `text-foreground`.
 
+## Export-time light theme
+
+PNG exports of the treemap (`ExportControls`'s "Export as light" toggle) can
+render on a light background instead of the app's permanent dark theme. This
+is export-only: the interactive dashboard never switches theme, and the swap
+happens on a cloned, serialized copy of the SVG at capture time, not on the
+live DOM. The PDF export is a plain white-background text document already,
+so the toggle has no visual effect there.
+
+The treemap SVG (`components/dashboard/D3Treemap.tsx`) paints chrome (tile
+text, the focus ring, tile borders) with literal colors rather than CSS
+custom properties, so there's no `--color-*` variable to flip at runtime.
+`lib/export-theme.ts`'s `EXPORT_THEME_TOKENS` is the documented source of
+truth for both the dark literals already in the markup and their light
+replacements, and `recolorSvgMarkupForExportTheme` performs the one-pass
+rewrite (see that file for why it's one pass, not sequential swaps).
+
+| Token | Dark (interactive app) | Light (export only) |
+| --- | --- | --- |
+| `background` | `#0B0E14` | `#ffffff` |
+| `tileBorder` | `#0B0E14` | `#ffffff` |
+| `textPrimary` (tile name, focus ring) | `#ffffff` | `#0b0e14` |
+| `textSecondary65` (identity, share) | `rgba(255,255,255,0.65)` | `rgba(11,14,20,0.72)` |
+| `textSecondary90` (value) | `rgba(255,255,255,0.9)` | `rgba(11,14,20,0.85)` |
+
+Data-category tile fills and the hatching-pattern overlays (`CATEGORY_COLORS`,
+`lib/treemap-patterns.ts`) are unaffected by either theme — they're semantic
+data colors, not chrome.
+
+### Measured ratios (light export theme)
+
+All measured against the light export background (`#ffffff`), using the same
+WCAG relative-luminance method as the table above:
+
+| Token | Effective color on white | Ratio | AA (4.5:1) |
+| --- | --- | --- | --- |
+| `textPrimary` | `#0b0e14` | 19.32:1 | ✓ |
+| `textSecondary65` | `rgba(11,14,20,0.72)` blended | 7.89:1 | ✓ |
+| `textSecondary90` | `rgba(11,14,20,0.85)` blended | ~11.8:1 | ✓ |
+
 ## Notes
 
 - Do not reuse interface accent colors for data category visualization.

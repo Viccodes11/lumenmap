@@ -1,5 +1,6 @@
 import type { ActivityVisualizationResponse, Period, TreemapNode } from "@/lib/types";
 import type { TreemapViewId } from "@/lib/constants";
+import { EXPORT_THEME_TOKENS, recolorSvgMarkupForExportTheme, type ExportTheme } from "@/lib/export-theme";
 
 export interface ExportMetadata {
   metric: string;
@@ -53,12 +54,14 @@ export function buildExportMetadata(
 export function exportSvgToPng(
   svgElement: SVGSVGElement,
   filename: string,
-  scale: number = 2
+  scale: number = 2,
+  theme: ExportTheme = "dark"
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
       const serializer = new XMLSerializer();
       let svgString = serializer.serializeToString(svgElement);
+      svgString = recolorSvgMarkupForExportTheme(svgString, theme);
 
       // Ensure proper namespace and dimensions for export
       if (!svgString.includes("xmlns=")) {
@@ -78,8 +81,7 @@ export function exportSvgToPng(
         return;
       }
 
-      // White background for readability
-      ctx.fillStyle = "#0B0E14";
+      ctx.fillStyle = EXPORT_THEME_TOKENS[theme].background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const img = new Image();

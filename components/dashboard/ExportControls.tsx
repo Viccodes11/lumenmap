@@ -1,5 +1,6 @@
 "use client";
 
+import { useId, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashboard } from "@/components/dashboard/DashboardProvider";
@@ -22,6 +23,8 @@ interface ExportControlsProps {
 
 export function ExportControls({ svgRef }: ExportControlsProps) {
   const { data, period, treemapView, isLoading, isFetching } = useDashboard();
+  const [exportAsLight, setExportAsLight] = useState(false);
+  const lightToggleId = useId();
 
   const activeView = TREEMAP_VIEWS.find((v) => v.id === treemapView);
   const viewLabel = activeView?.label || "Network Activity";
@@ -59,7 +62,7 @@ export function ExportControls({ svgRef }: ExportControlsProps) {
         "png",
       );
 
-      await exportSvgToPng(svgElement, filename, 2);
+      await exportSvgToPng(svgElement, filename, 2, exportAsLight ? "light" : "dark");
     } catch (error) {
       console.error("PNG export failed:", error);
       alert("Failed to export PNG. Please try again.");
@@ -147,13 +150,27 @@ export function ExportControls({ svgRef }: ExportControlsProps) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <label
+        htmlFor={lightToggleId}
+        className="flex items-center gap-1.5 text-xs text-zinc-400"
+        title="Render the PNG export on a light background instead of the app's dark theme. The app itself stays dark; only the exported file changes."
+      >
+        <input
+          id={lightToggleId}
+          type="checkbox"
+          checked={exportAsLight}
+          onChange={(e) => setExportAsLight(e.target.checked)}
+          className="h-3.5 w-3.5 accent-[#5f4ae0]"
+        />
+        Export as light
+      </label>
       <Button
         variant="outline"
         size="sm"
         onClick={handleExportPng}
         className="gap-1.5 text-xs"
-        title="Export current treemap visualization as PNG"
+        title={`Export current treemap visualization as PNG (${exportAsLight ? "light" : "dark"} background)`}
       >
         <Download className="h-3.5 w-3.5" />
         Export PNG
@@ -173,7 +190,7 @@ export function ExportControls({ svgRef }: ExportControlsProps) {
         size="sm"
         onClick={handleExportPdf}
         className="gap-1.5 text-xs"
-        title="Export KPI row, chart title, and freshness as PDF"
+        title="Export KPI row, chart title, and freshness as PDF (already a light/white page — the light toggle above only affects PNG)"
       >
         <Download className="h-3.5 w-3.5" />
         Export PDF
