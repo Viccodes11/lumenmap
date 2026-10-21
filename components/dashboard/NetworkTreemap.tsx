@@ -162,6 +162,7 @@ export function NetworkTreemap() {
           : metric === "protocol_tvl"
             ? "protocol TVL"
             : "operations";
+  const isFlowView = chartView === "flow";
 
   if (treemapView === "flow") {
     return <FlowView />;

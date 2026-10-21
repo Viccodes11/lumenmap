@@ -173,6 +173,80 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/v1/snapshots": {
+      post: {
+        operationId: "createResearchSnapshot",
+        summary: "Store an immutable research snapshot",
+        description:
+          "Accepts period, metric, view, selected nodes, and the KPI payload. The server stores a SHA-256 KPI payload hash and a short opaque id. Default TTL is 604800 seconds (7 days). Default body cap is 65536 bytes; larger bodies return 413. Storage is process-local memory and does not query Hubble.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ResearchSnapshotCreate" },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Snapshot stored",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ResearchSnapshotCreated" },
+              },
+            },
+          },
+          "400": {
+            description: "Invalid snapshot body",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ApiError" },
+              },
+            },
+          },
+          "413": {
+            description: "Body exceeds SNAPSHOT_MAX_BYTES",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ApiError" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/snapshots/{id}": {
+      get: {
+        operationId: "getResearchSnapshot",
+        summary: "Fetch a frozen research snapshot",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Frozen snapshot payload",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ResearchSnapshot" },
+              },
+            },
+          },
+          "404": {
+            description: "Missing or expired snapshot",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ApiError" },
+              },
+            },
+          },
+        },
+      },
+    },
     "/api/health": {
       get: {
         operationId: "getHealth",
@@ -231,6 +305,64 @@ export const openApiDocument = {
       Period: {
         type: "string",
         enum: ["1d", "7d", "30d", "month"],
+      },
+      ResearchSnapshotCreate: {
+        type: "object",
+        required: ["period", "metric", "view", "selectedNodes", "kpis"],
+        properties: {
+          period: { $ref: "#/components/schemas/Period" },
+          metric: {
+            type: "string",
+            enum: ["ops", "xlm_volume", "usdc", "transactions", "protocol_tvl"],
+          },
+          view: {
+            type: "string",
+            enum: ["events", "actors", "actors_dest", "flow"],
+          },
+          selectedNodes: {
+            type: "array",
+            maxItems: 32,
+            items: { type: "object", required: ["name"] },
+          },
+          kpis: { type: "object" },
+          treemap: { type: "object" },
+        },
+      },
+      ResearchSnapshot: {
+        type: "object",
+        required: [
+          "id",
+          "generatedAt",
+          "expiresAt",
+          "period",
+          "metric",
+          "view",
+          "selectedNodes",
+          "kpiPayloadHash",
+          "kpis",
+        ],
+        properties: {
+          id: { type: "string" },
+          generatedAt: { type: "string", format: "date-time" },
+          expiresAt: { type: "string", format: "date-time" },
+          period: { $ref: "#/components/schemas/Period" },
+          metric: { type: "string" },
+          view: { type: "string" },
+          selectedNodes: { type: "array", items: { type: "object" } },
+          kpiPayloadHash: { type: "string" },
+          kpis: { type: "object" },
+        },
+      },
+      ResearchSnapshotCreated: {
+        type: "object",
+        required: ["id", "url", "ttlSeconds", "snapshot"],
+        properties: {
+          id: { type: "string" },
+          url: { type: "string" },
+          ttlSeconds: { type: "integer", description: "Default 604800 (7 days)." },
+          maxBytes: { type: "integer", description: "Default 65536." },
+          snapshot: { $ref: "#/components/schemas/ResearchSnapshot" },
+        },
       },
       FlowResponse: {
         type: "object",

@@ -23,6 +23,8 @@ import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { DashboardSearch } from "@/components/dashboard/DashboardSearch";
 import { ComparisonPanel } from "@/components/dashboard/ComparisonPanel";
 import { SavedViewsControls } from "@/components/dashboard/SavedViewsControls";
+import { SnapshotBanner } from "@/components/dashboard/SnapshotBanner";
+import { SnapshotShareControls } from "@/components/dashboard/SnapshotShareControls";
 import { NetworkSelector } from "@/components/dashboard/NetworkSelector";
 import { TabbedSection } from "@/components/ui/tabbed-section";
 import {
@@ -30,9 +32,11 @@ import {
   networkLabel,
   unsupportedMetricMessage,
 } from "@/lib/network";
+import type { ResearchSnapshot } from "@/lib/snapshots/types";
 
 function DashboardContent() {
-  const { selectedNode, network, metric, setMetric, period } = useDashboard();
+  const { selectedNode, network, metric, setMetric, readOnly, snapshot } =
+    useDashboard();
   const metricSupported = isMetricSupportedOnNetwork(metric, network);
 
   return (
@@ -56,21 +60,30 @@ function DashboardContent() {
               {networkLabel(network).toLowerCase()}
             </p>
           </div>
-          <NetworkSelector />
+          <div className={readOnly ? "pointer-events-none opacity-70" : undefined}>
+            <NetworkSelector />
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className={`flex items-center gap-3 ${readOnly ? "pointer-events-none opacity-70" : ""}`}>
           <FreshnessIndicator />
           <PeriodSelector />
         </div>
       </header>
 
+      {snapshot ? (
+        <SnapshotBanner
+          generatedAt={snapshot.generatedAt}
+          detail={`${snapshot.period} · ${snapshot.metric} · ${snapshot.view}`}
+        />
+      ) : null}
+
       <FreshnessWarning />
 
       <ActivityErrorBanner />
 
-      <SavedViewsControls />
+      {readOnly ? null : <SavedViewsControls />}
 
-      {!metricSupported && (
+      {!readOnly && !metricSupported && (
         <div
           role="status"
           className="rounded-lg border border-amber-800/70 bg-amber-950/40 px-4 py-3 text-sm text-amber-100"
@@ -88,8 +101,9 @@ function DashboardContent() {
 
       {/* Controls */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <DashboardSearch />
-        <SavedViewsControls />
+        {readOnly ? null : <DashboardSearch />}
+        {readOnly ? null : <SavedViewsControls />}
+        <SnapshotShareControls />
       </div>
 
       {/* KPIs - quick overview */}
@@ -114,6 +128,7 @@ function DashboardContent() {
       </div>
 
       {/* Supporting charts - tabbed section */}
+      {readOnly ? null : (
       <TabbedSection
         tabs={[
           {
@@ -146,6 +161,7 @@ function DashboardContent() {
         ] as const}
         defaultTab="volume"
       />
+      )}
 
       {/* Methodology link */}
       <p className="text-center text-xs text-zinc-500">
@@ -163,12 +179,15 @@ function DashboardContent() {
 
 export function DashboardPage({
   flowViewEnabled = false,
+  snapshot = null,
 }: {
   /** Flow feature flag resolved in the server component. */
   flowViewEnabled?: boolean;
+  /** Frozen snapshot rendered at /s/:id. Live activity is not queried. */
+  snapshot?: ResearchSnapshot | null;
 } = {}) {
   return (
-    <DashboardProvider flowViewEnabled={flowViewEnabled}>
+    <DashboardProvider flowViewEnabled={flowViewEnabled} snapshot={snapshot}>
       <DashboardContent />
     </DashboardProvider>
   );

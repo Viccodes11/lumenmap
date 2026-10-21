@@ -17,6 +17,8 @@ import {
   writeDashboardUrlSearch,
 } from "@/lib/dashboard-url-state";
 import { findTreemapPath, type SearchResult } from "@/lib/search";
+import { materializeSnapshot } from "@/lib/snapshots/materialize";
+import type { ResearchSnapshot } from "@/lib/snapshots/types";
 import type {
   ActivityVisualizationResponse,
   ApiErrorResponse,
@@ -66,6 +68,9 @@ interface DashboardContextValue {
   setFlowMode: (mode: "graph" | "table") => void;
   egoAddress: string | null;
   setEgoAddress: (address: string | null) => void;
+  /** True when the dashboard is showing a frozen /s/:id snapshot. */
+  readOnly: boolean;
+  snapshot: ResearchSnapshot | null;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -156,28 +161,53 @@ function activeTreemapRoot(
 export function DashboardProvider({
   children,
   flowViewEnabled = false,
+  snapshot = null,
 }: {
   children: React.ReactNode;
   /** Resolved server-side; defaults to off so the treemap stays the default. */
   flowViewEnabled?: boolean;
+  /** Frozen research snapshot. Disables live activity queries. */
+  snapshot?: ResearchSnapshot | null;
 }) {
-  const [period, setPeriodState] = useState<Period>("1d");
+  const readOnly = snapshot != null;
+  const [period, setPeriodState] = useState<Period>(snapshot?.period ?? "1d");
   const [comparePeriod, setComparePeriod] = useState<Period | null>(null);
-  const [treemapView, setTreemapViewState] = useState<TreemapViewId>("events");
+  const [treemapView, setTreemapViewState] = useState<TreemapViewId>(
+    snapshot && snapshot.view !== "flow" ? snapshot.view : "events",
+  );
   const [chartView, setChartViewState] = useState<ChartViewId>("treemap");
-  const [metric, setMetricState] = useState<DashboardMetricId>("ops");
-  const [network, setNetworkState] =
-    useState<import("@/lib/network").DashboardNetworkId>("mainnet");
+  const [metric, setMetricState] = useState<DashboardMetricId>(
+    snapshot?.metric ?? "ops",
+  );
+  const [network, setNetworkState] = useState<
+    import("@/lib/network").DashboardNetworkId
+  >(snapshot?.network ?? "mainnet");
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [activeLevelPath, setActiveLevelPath] = useState<TreemapNode[]>([]);
   const [focusRequest, setFocusRequest] = useState<SearchResult | null>(null);
+  const [visualization, setVisualizationState] = useState<"treemap" | "flow">(
+    "treemap",
+  );
+  const [searchQuery, setSearchQueryState] = useState("");
   const [flowMode, setFlowMode] = useState<"graph" | "table">("graph");
   const [egoAddress, setEgoAddress] = useState<string | null>(null);
   const pendingPathSegments = useRef<string[] | null>(null);
-  const [urlReady, setUrlReady] = useState(false);
+  const selectionApplied = useRef(false);
+  const [urlReady, setUrlReady] = useState(readOnly);
+  const frozen = useMemo(
+    () => (snapshot ? materializeSnapshot(snapshot) : null),
+    [snapshot],
+  );
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!frozen || selectionApplied.current) return;
+    selectionApplied.current = true;
+    setActiveLevelPath(frozen.path);
+    if (frozen.selected) setSelectedNode(frozen.selected);
+  }, [frozen]);
+
+  useEffect(() => {
+    if (readOnly || typeof window === "undefined") return;
     const parsed = parseDashboardUrlSearch(window.location.search);
     if (parsed.pathSegments && parsed.pathSegments.length > 0) {
       pendingPathSegments.current = parsed.pathSegments;
@@ -185,7 +215,7 @@ export function DashboardProvider({
     // Defer state updates so hydration does not cascade synchronously in the effect body.
     queueMicrotask(() => {
       if (new URLSearchParams(window.location.search).get("view") === "flow") {
-        setVisualization("flow");
+        setVisualizationState("flow");
       }
       if (parsed.period) setPeriodState(parsed.period);
       if (parsed.comparePeriod) setComparePeriod(parsed.comparePeriod);
@@ -199,18 +229,20 @@ export function DashboardProvider({
       if (parsed.egoAddress) setEgoAddress(parsed.egoAddress);
       setUrlReady(true);
     });
-  }, [flowViewEnabled]);
+  }, [flowViewEnabled, readOnly]);
 
   const handleSetPeriod = useCallback((newPeriod: Period) => {
+    if (readOnly) return;
     setSelectedNode(null);
     setActiveLevelPath([]);
     setFocusRequest(null);
     pendingPathSegments.current = null;
     setPeriodState(newPeriod);
-  }, []);
+  }, [readOnly]);
 
   const handleSetTreemapView = useCallback((newView: TreemapViewId) => {
-    setVisualization("treemap");
+    if (readOnly) return;
+    setVisualizationState("treemap");
     setSelectedNode(null);
     setActiveLevelPath([]);
     setFocusRequest(null);
@@ -218,46 +250,54 @@ export function DashboardProvider({
     // Picking a treemap sub-view always returns to the treemap chart view.
     setChartViewState("treemap");
     setTreemapViewState(newView);
-  }, []);
+  }, [readOnly]);
 
   const handleSetChartView = useCallback((newView: ChartViewId) => {
+    if (readOnly) return;
     setSelectedNode(null);
     setActiveLevelPath([]);
     setFocusRequest(null);
     pendingPathSegments.current = null;
     setChartViewState(newView);
-  }, []);
+  }, [readOnly]);
 
   const handleSetMetric = useCallback((newMetric: DashboardMetricId) => {
+    if (readOnly) return;
     setSelectedNode(null);
     setActiveLevelPath([]);
     setFocusRequest(null);
     pendingPathSegments.current = null;
     setMetricState(newMetric);
-  }, []);
+  }, [readOnly]);
+
+  const handleSetComparePeriod = useCallback((next: Period | null) => {
+    if (readOnly) return;
+    setComparePeriod(next);
+  }, [readOnly]);
 
   const handleSetNetwork = useCallback(
     (next: import("@/lib/network").DashboardNetworkId) => {
+      if (readOnly) return;
       setSelectedNode(null);
       setActiveLevelPath([]);
       setFocusRequest(null);
       pendingPathSegments.current = null;
       setNetworkState(next);
     },
-    [],
+    [readOnly],
   );
 
   const query = useQuery({
     queryKey: ["activity", period, network],
     queryFn: () => fetchActivity(period, network),
-    enabled: urlReady,
+    enabled: urlReady && !readOnly,
     staleTime: 60_000,
   });
 
   const comparisonQuery = useQuery({
     queryKey: ["activity", comparePeriod, network],
     queryFn: () => fetchActivity(comparePeriod as Period, network),
-    enabled: urlReady && comparePeriod !== null,
+    enabled: urlReady && comparePeriod !== null && !readOnly,
     staleTime: 60_000,
   });
 
@@ -272,7 +312,7 @@ export function DashboardProvider({
   }, [query.data, treemapView, metric]);
 
   useEffect(() => {
-    if (!urlReady || typeof window === "undefined") return;
+    if (!urlReady || readOnly || typeof window === "undefined") return;
     let next = writeDashboardUrlSearch({
       period,
       metric,
@@ -298,7 +338,7 @@ export function DashboardProvider({
         `${window.location.pathname}${next}`,
       );
     }
-  }, [urlReady, period, metric, treemapView, activeLevelPath, comparePeriod, network, flowMode, egoAddress]);
+  }, [urlReady, readOnly, period, metric, treemapView, activeLevelPath, comparePeriod, network, flowMode, egoAddress, chartView, searchQuery, visualization]);
 
   const selectSearchResult = useCallback(
     (result: SearchResult) => {
@@ -314,11 +354,14 @@ export function DashboardProvider({
   const value = useMemo(
     () => ({
       visualization,
-      setVisualization,
+      setVisualization: (view: "treemap" | "flow") => {
+        if (readOnly) return;
+        setVisualizationState(view);
+      },
       period,
       setPeriod: handleSetPeriod,
       comparePeriod,
-      setComparePeriod,
+      setComparePeriod: handleSetComparePeriod,
       comparisonData: comparisonQuery.data,
       comparisonLoading:
         comparisonQuery.isLoading || comparisonQuery.isFetching,
@@ -332,24 +375,29 @@ export function DashboardProvider({
       setMetric: handleSetMetric,
       network,
       setNetwork: handleSetNetwork,
-      data: query.data,
-      isLoading: query.isLoading,
-      isError: query.isError,
-      isFetching: query.isFetching,
-      error: query.error,
-      refetch: query.refetch,
+      data: readOnly ? frozen?.data : query.data,
+      isLoading: readOnly ? false : query.isLoading,
+      isError: readOnly ? false : query.isError,
+      isFetching: readOnly ? false : query.isFetching,
+      error: readOnly ? null : query.error,
+      refetch: readOnly ? async () => frozen?.data : query.refetch,
       selectedNode,
       setSelectedNode,
       activeLevelPath,
       setActiveLevelPath,
       focusRequest,
       searchQuery,
-      setSearchQuery,
+      setSearchQuery: (query: string) => {
+        if (readOnly) return;
+        setSearchQueryState(query);
+      },
       selectSearchResult,
       flowMode,
       setFlowMode,
       egoAddress,
       setEgoAddress,
+      readOnly,
+      snapshot,
     }),
     [
       visualization,
@@ -382,6 +430,10 @@ export function DashboardProvider({
       selectSearchResult,
       flowMode,
       egoAddress,
+      readOnly,
+      frozen,
+      handleSetComparePeriod,
+      snapshot,
     ],
   );
 
