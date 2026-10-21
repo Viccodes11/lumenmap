@@ -24,6 +24,7 @@ import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { DashboardSearch } from "@/components/dashboard/DashboardSearch";
 import { ComparisonPanel } from "@/components/dashboard/ComparisonPanel";
 import { SavedViewsControls } from "@/components/dashboard/SavedViewsControls";
+import { WatchlistPanel } from "@/components/dashboard/WatchlistPanel";
 import { NetworkSelector } from "@/components/dashboard/NetworkSelector";
 import { TabbedSection } from "@/components/ui/tabbed-section";
 import {
@@ -69,6 +70,8 @@ function DashboardContent() {
 
       <ActivityErrorBanner />
 
+      <WatchlistPanel />
+
       <SavedViewsControls />
 
       {!metricSupported && (
@@ -95,6 +98,8 @@ function DashboardContent() {
 
       {/* KPIs - quick overview */}
       <KpiCards />
+
+      <FlowEgoSection />
 
       {/* Primary visualization */}
       <div
