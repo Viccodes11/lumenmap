@@ -32,9 +32,11 @@ describe("buildSearchIndex", () => {
   });
 
   it("keeps duplicate labels as distinct contract rows", () => {
+    const fixtureIds = new Set(data.contracts.map((row) => row.contract_id));
     const aquarius = index.filter(
       (entry) =>
-        entry.type === "contract" && entry.label === "Aquarius Pool",
+        entry.type === "contract" && entry.label === "Aquarius Pool" &&
+        fixtureIds.has(entry.id ?? ""),
     );
     assert.equal(aquarius.length, 2);
     const ids = new Set(aquarius.map((entry) => entry.id));
@@ -84,6 +86,46 @@ describe("searchIndex", () => {
     const results = flatResults("soroswap");
     assert.ok(results.some((r) => r.type === "protocol" && r.label === "Soroswap"));
     assert.ok(results.some((r) => r.type === "contract"));
+  });
+
+  it("finds registry labels and known protocols beyond the loaded activity", () => {
+    const results = flatResults("lobstr");
+    assert.ok(results.some((r) => r.label === "LOBSTR"));
+    assert.ok(results.some((r) => r.type === "protocol" && r.label === "LOBSTR"));
+    const registryOnly = searchIndex(buildSearchIndex(), "lobstr");
+    assert.ok(registryOnly.groups.some((group) =>
+      group.results.some((result) => result.label === "LOBSTR"),
+    ));
+  });
+
+  it("ranks typo matches below exact labels and highlights the matching word", () => {
+    const exact = flatResults("Soroswap");
+    const typo = flatResults("Soroswp");
+    assert.ok(exact.some((r) => r.label === "Soroswap"));
+    const match = typo.find((r) => r.label === "Soroswap");
+    assert.ok(match);
+    assert.deepEqual(match.highlights?.label, [{ start: 0, end: 8 }]);
+    assert.ok(flatResults("Aquaris").some((r) => r.label === "Aquarius Pool"));
+  });
+
+  it("puts a pasted address before protocol and asset aliases", () => {
+    const id = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
+    const results = flatResults(id);
+    assert.equal(results[0]?.type, "account");
+    assert.equal(results[0]?.id, id);
+    assert.deepEqual(results[0]?.highlights?.subtitle?.[0], {
+      start: results[0]?.subtitle?.indexOf(id),
+      end: (results[0]?.subtitle?.indexOf(id) ?? 0) + id.length,
+    });
+  });
+
+  it("caps broad result sets and searches the registry promptly", () => {
+    const start = performance.now();
+    const broad = searchIndex(index, "a", 500);
+    const typo = searchIndex(index, "Soroswp");
+    assert.ok(broad.total <= 40);
+    assert.ok(typo.total > 0);
+    assert.ok(performance.now() - start < 5_000);
   });
 
   it("returns multiple USDC assets distinguished by issuer", () => {
@@ -151,8 +193,9 @@ describe("selection / path behavior", () => {
   });
 
   it("distinguishes duplicate Aquarius Pool contracts by id on selection", () => {
+    const fixtureIds = new Set(data.contracts.map((row) => row.contract_id));
     const results = flatResults("Aquarius Pool").filter(
-      (r) => r.type === "contract",
+      (r) => r.type === "contract" && fixtureIds.has(r.id ?? ""),
     );
     assert.equal(results.length, 2);
     const paths = results.map((r) => findTreemapPath(data.treemaps.actors, r));

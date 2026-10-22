@@ -5,6 +5,7 @@ export {
   SEARCH_RESULT_TYPE_LABELS,
   SEARCH_RESULT_TYPE_ORDER,
   type GroupedSearchResults,
+  type MatchSpan,
   type SearchIndexEntry,
   type SearchQueryResult,
   type SearchResult,

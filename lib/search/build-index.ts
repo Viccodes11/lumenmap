@@ -1,5 +1,5 @@
 import { GROUP_LABELS, type TreemapViewId } from "@/lib/constants";
-import { lookupEntity } from "@/lib/entities/registry";
+import { getAllEntities, lookupEntity } from "@/lib/entities/registry";
 import type {
   ActivityVisualizationResponse,
   ActivityDataset,
@@ -80,6 +80,15 @@ export function extractAssetCode(name: string): string | null {
 }
 
 function finalize(entry: MutableEntry): SearchIndexEntry {
+  const fuzzyTerms = new Set<string>();
+  for (const text of [entry.label, entry.protocol]) {
+    if (!text || text === entry.id) continue;
+    const folded = text.toLowerCase();
+    fuzzyTerms.add(folded);
+    for (const token of folded.match(/[a-z0-9]+/g) ?? []) {
+      if (token.length >= 2) fuzzyTerms.add(token);
+    }
+  }
   return {
     key: entry.key,
     type: entry.type,
@@ -95,6 +104,7 @@ function finalize(entry: MutableEntry): SearchIndexEntry {
     nodeType: entry.nodeType,
     exactIds: [...entry.exactIds],
     terms: [...entry.terms],
+    fuzzyTerms: [...fuzzyTerms],
   };
 }
 
@@ -357,11 +367,11 @@ type SearchableActivity = ActivityVisualizationResponse &
     >
   >;
 
-export function buildSearchIndex(data: SearchableActivity): SearchIndexEntry[] {
+export function buildSearchIndex(data?: SearchableActivity): SearchIndexEntry[] {
   const map = new Map<string, MutableEntry>();
-  const labels = collectLabelsFromActivity(data);
+  const labels = data ? collectLabelsFromActivity(data) : {};
 
-  for (const row of data.accounts ?? []) {
+  for (const row of data?.accounts ?? []) {
     indexAccountOrContract(
       map,
       row.account_id,
@@ -376,7 +386,7 @@ export function buildSearchIndex(data: SearchableActivity): SearchIndexEntry[] {
     }
   }
 
-  for (const row of data.contracts ?? []) {
+  for (const row of data?.contracts ?? []) {
     indexAccountOrContract(
       map,
       row.contract_id,
@@ -391,7 +401,7 @@ export function buildSearchIndex(data: SearchableActivity): SearchIndexEntry[] {
     }
   }
 
-  for (const row of data.sorobanFunctionContracts ?? []) {
+  for (const row of data?.sorobanFunctionContracts ?? []) {
     indexAccountOrContract(
       map,
       row.contract_id,
@@ -408,7 +418,7 @@ export function buildSearchIndex(data: SearchableActivity): SearchIndexEntry[] {
 
   // Categories from KPI groupings.
   const categoryTotals = new Map<string, number>();
-  for (const row of data.categories ?? []) {
+  for (const row of data?.categories ?? []) {
     // type_string is an op type; group label comes from treemap category nodes.
     categoryTotals.set(
       row.type_string,
@@ -416,7 +426,7 @@ export function buildSearchIndex(data: SearchableActivity): SearchIndexEntry[] {
     );
   }
 
-  for (const root of Object.values(data.treemaps)) {
+  for (const root of Object.values(data?.treemaps ?? {})) {
     walkTreemap(root, (node) => {
       const meta = node.meta;
       if (!meta) {
@@ -487,6 +497,20 @@ export function buildSearchIndex(data: SearchableActivity): SearchIndexEntry[] {
         labels,
       );
     }
+  }
+
+  // Keep directory entities and their protocol names searchable even when
+  // they are outside the currently loaded activity window.
+  for (const [id, info] of Object.entries(getAllEntities())) {
+    if (!/^[GC][A-Z2-7]{55}$/.test(id)) continue;
+    indexAccountOrContract(
+      map,
+      id,
+      id.startsWith("C") ? "contract" : "account",
+      0,
+      labels,
+    );
+    indexProtocol(map, info.protocol, 0, id);
   }
 
   return [...map.values()].map(finalize);

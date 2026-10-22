@@ -47,6 +47,13 @@ export interface SearchResult {
   treemapView: TreemapViewId;
   /** Meta type mirrored onto SelectedNode when opening context. */
   nodeType: TreemapNodeType;
+  /** Character ranges to highlight in the displayed label and subtitle. */
+  highlights?: { label: MatchSpan[]; subtitle: MatchSpan[] };
+}
+
+export interface MatchSpan {
+  start: number;
+  end: number;
 }
 
 export interface SearchIndexEntry extends SearchResult {
@@ -54,6 +61,8 @@ export interface SearchIndexEntry extends SearchResult {
   exactIds: string[];
   /** Case-folded tokens used for name / protocol matching. */
   terms: string[];
+  /** Pre-tokenized display names and protocol labels for typo matching. */
+  fuzzyTerms: string[];
 }
 
 export interface GroupedSearchResults {

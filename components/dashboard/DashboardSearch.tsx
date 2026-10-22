@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   buildSearchIndex,
   searchIndex,
+  type MatchSpan,
   type SearchResult,
 } from "@/lib/search";
 import { SHORTCUT_KEYS } from "@/lib/shortcuts";
@@ -29,6 +30,23 @@ function resultTypeBadge(type: SearchResult["type"]): string {
   }
 }
 
+function highlightedText(text: string, spans: MatchSpan[]) {
+  if (spans.length === 0) return text;
+  const pieces: React.ReactNode[] = [];
+  let cursor = 0;
+  for (const { start, end } of spans) {
+    pieces.push(text.slice(cursor, start));
+    pieces.push(
+      <mark key={start} className="rounded-sm bg-stellar/25 text-inherit">
+        {text.slice(start, end)}
+      </mark>,
+    );
+    cursor = end;
+  }
+  pieces.push(text.slice(cursor));
+  return pieces;
+}
+
 export function DashboardSearch() {
   const {
     data,
@@ -40,22 +58,30 @@ export function DashboardSearch() {
   const inputId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
 
   const index = useMemo(
-    () => (data ? buildSearchIndex(data) : []),
+    () => buildSearchIndex(data),
     [data],
   );
 
+  useEffect(() => {
+    // Search is local: cancel the pending calculation when the query changes.
+    const timer = window.setTimeout(() => setDebouncedQuery(searchQuery), 150);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  const pending = debouncedQuery !== searchQuery;
   const results = useMemo(
-    () => searchIndex(index, searchQuery),
-    [index, searchQuery],
+    () => searchIndex(index, debouncedQuery),
+    [index, debouncedQuery],
   );
 
   const flatResults = useMemo(
-    () => results.groups.flatMap((group) => group.results),
-    [results],
+    () => pending ? [] : results.groups.flatMap((group) => group.results),
+    [pending, results],
   );
 
   // Derive a clamped active index so query changes never leave a stale cursor.
@@ -63,6 +89,7 @@ export function DashboardSearch() {
     flatResults.length === 0
       ? 0
       : Math.min(activeIndex, flatResults.length - 1);
+  const showPanel = !dismissed && searchQuery.trim().length > 0;
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -70,7 +97,7 @@ export function DashboardSearch() {
         return;
       }
       if (!containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
+        setDismissed(true);
       }
     }
 
@@ -79,21 +106,19 @@ export function DashboardSearch() {
   }, []);
 
   useEffect(() => {
-    if (!open || !listRef.current) {
+    if (!showPanel || !listRef.current) {
       return;
     }
     const active = listRef.current.querySelector<HTMLElement>(
       `[data-search-index="${safeActiveIndex}"]`,
     );
     active?.scrollIntoView({ block: "nearest" });
-  }, [safeActiveIndex, open, flatResults.length]);
-
-  const showPanel = open && searchQuery.trim().length > 0;
+  }, [safeActiveIndex, showPanel, flatResults.length]);
 
   const handleSelect = (result: SearchResult) => {
     selectSearchResult(result);
     setSearchQuery("");
-    setOpen(false);
+    setDismissed(true);
     setActiveIndex(0);
   };
 
@@ -102,16 +127,28 @@ export function DashboardSearch() {
       return;
     }
 
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setDismissed(true);
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) return;
+
+    const keyboardResults = pending
+      ? searchIndex(index, searchQuery).groups.flatMap((group) => group.results)
+      : flatResults;
+    if (pending) setDebouncedQuery(searchQuery);
+
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActiveIndex((current) => {
         const base =
-          flatResults.length === 0
+          keyboardResults.length === 0
             ? 0
-            : Math.min(current, flatResults.length - 1);
-        return flatResults.length === 0
+            : Math.min(current, keyboardResults.length - 1);
+        return keyboardResults.length === 0
           ? 0
-          : Math.min(base + 1, flatResults.length - 1);
+          : Math.min(base + 1, keyboardResults.length - 1);
       });
       return;
     }
@@ -120,9 +157,9 @@ export function DashboardSearch() {
       event.preventDefault();
       setActiveIndex((current) => {
         const base =
-          flatResults.length === 0
+          keyboardResults.length === 0
             ? 0
-            : Math.min(current, flatResults.length - 1);
+            : Math.min(current, keyboardResults.length - 1);
         return Math.max(base - 1, 0);
       });
       return;
@@ -130,17 +167,13 @@ export function DashboardSearch() {
 
     if (event.key === "Enter") {
       event.preventDefault();
-      const target = flatResults[safeActiveIndex];
+      const target = keyboardResults[Math.min(activeIndex, keyboardResults.length - 1)];
       if (target) {
         handleSelect(target);
       }
       return;
     }
 
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setOpen(false);
-    }
   };
 
   // Precompute flat index offsets per group for stable option ids.
@@ -179,13 +212,12 @@ export function DashboardSearch() {
           spellCheck={false}
           placeholder="Search address, contract, asset, or protocol…"
           value={searchQuery}
-          disabled={isLoading && !data}
           onChange={(event) => {
             setSearchQuery(event.target.value);
-            setOpen(true);
+            setDismissed(false);
             setActiveIndex(0);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => setDismissed(false)}
           onKeyDown={handleKeyDown}
           className={cn(
             "h-10 w-full rounded-lg border border-white/10 bg-black/30 py-2 pl-10 pr-10 text-sm text-zinc-100",
@@ -193,21 +225,21 @@ export function DashboardSearch() {
             "disabled:cursor-not-allowed disabled:opacity-60",
           )}
         />
-        {isLoading && !data ? (
-          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-zinc-400" />
-        ) : searchQuery ? (
+        {searchQuery ? (
           <button
             type="button"
             aria-label="Clear search"
             className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
             onClick={() => {
               setSearchQuery("");
-              setOpen(false);
+              setDismissed(true);
               setActiveIndex(0);
             }}
           >
             <X className="h-4 w-4" />
           </button>
+        ) : isLoading && !data ? (
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-zinc-400" />
         ) : null}
       </div>
 
@@ -217,10 +249,9 @@ export function DashboardSearch() {
           role="listbox"
           id={`${inputId}-listbox`}
         >
-          {isLoading && !data ? (
-            <div className="flex items-center gap-2 px-4 py-6 text-sm text-zinc-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading dashboard data…
+          {pending ? (
+            <div className="px-4 py-6 text-sm text-zinc-400" role="status">
+              Searching…
             </div>
           ) : results.total === 0 ? (
             <div className="px-4 py-6 text-sm text-zinc-400">
@@ -263,7 +294,7 @@ export function DashboardSearch() {
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="truncate text-sm font-medium">
-                                  {result.label}
+                                  {highlightedText(result.label, result.highlights?.label ?? [])}
                                 </span>
                                 <Badge variant="secondary" className="shrink-0">
                                   {resultTypeBadge(result.type)}
@@ -271,11 +302,7 @@ export function DashboardSearch() {
                               </div>
                               {result.subtitle ? (
                                 <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-500">
-                                  {result.subtitle.length > 72
-                                    ? result.id
-                                      ? `${result.subtitle.split("·")[0] ?? ""}· ${truncateAddress(result.id, 6)}`
-                                      : `${result.subtitle.slice(0, 64)}…`
-                                    : result.subtitle}
+                                  {highlightedText(result.subtitle, result.highlights?.subtitle ?? [])}
                                 </p>
                               ) : null}
                               {result.type === "asset" && result.issuer ? (

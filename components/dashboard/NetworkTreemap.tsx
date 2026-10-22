@@ -110,8 +110,6 @@ export function NetworkTreemap() {
   const [excludedCategories, setExcludedCategories] = useState<Set<string>>(
     new Set(),
   );
-  const isFlowView = flowViewEnabled && chartView === "flow";
-  const chartPanelId = "network-chart-panel";
 
   const toggleCategory = (key: string) => {
     setExcludedCategories((prev) => {
@@ -166,7 +164,6 @@ export function NetworkTreemap() {
           : metric === "protocol_tvl"
             ? "protocol TVL"
             : "operations";
-  const isFlowView = chartView === "flow";
 
   if (treemapView === "flow") {
     return <FlowView />;

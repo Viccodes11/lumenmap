@@ -178,8 +178,6 @@ export function DashboardProvider({
     snapshot && snapshot.view !== "flow" ? snapshot.view : "events",
   );
   const [chartView, setChartViewState] = useState<ChartViewId>("treemap");
-  const [visualization, setVisualization] = useState<"treemap" | "flow">("treemap");
-  const [searchQuery, setSearchQuery] = useState("");
   const [metric, setMetricState] = useState<DashboardMetricId>("ops");
   const [network, setNetworkState] =
     useState<import("@/lib/network").DashboardNetworkId>("mainnet");
@@ -229,7 +227,7 @@ export function DashboardProvider({
       if (parsed.flowMode) setFlowMode(parsed.flowMode);
       if (parsed.egoAddress) setEgoAddress(parsed.egoAddress);
       const query = new URLSearchParams(window.location.search).get("q");
-      if (query) setSearchQuery(query);
+      if (query) setSearchQueryState(query);
       setUrlReady(true);
     });
   }, [flowViewEnabled, readOnly]);
@@ -360,7 +358,7 @@ export function DashboardProvider({
       setSelectedNode(node);
       if (flowViewEnabled && address) {
         setChartViewState("flow");
-        setVisualization("flow");
+        setVisualizationState("flow");
         setEgoAddress(address);
       }
     },
