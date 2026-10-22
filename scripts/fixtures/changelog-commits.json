@@ -1,0 +1,18 @@
+[
+  {
+    "sha": "1111111111111111111111111111111111111111",
+    "subject": "feat(api): expose protocol freshness metadata"
+  },
+  {
+    "sha": "2222222222222222222222222222222222222222",
+    "subject": "fix(ui): keep the period selector visible at high zoom"
+  },
+  {
+    "sha": "3333333333333333333333333333333333333333",
+    "subject": "docs(methodology): clarify incomplete-period coverage"
+  },
+  {
+    "sha": "4444444444444444444444444444444444444444",
+    "subject": "chore: refresh local fixtures"
+  }
+]

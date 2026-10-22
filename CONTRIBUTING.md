@@ -20,6 +20,7 @@ Thank you for your interest in contributing. This guide covers everything you ne
 - [Entity registry](#entity-registry)
 - [Issue sizing (Wave estimate guide)](#issue-sizing-wave-estimate-guide)
 - [Branch and PR workflow](#branch-and-pr-workflow)
+- [Changelog workflow](#changelog-workflow)
 - [Pull request expectations](#pull-request-expectations)
 
 ---
@@ -391,6 +392,47 @@ Size labels are independent of the `good first issue` label — a `size:S` issue
    ```
 
    Then open a pull request on GitHub targeting `main`.
+
+---
+
+## Changelog workflow
+
+Use conventional commit subjects for public API and UI changes so release notes
+can be generated without a GitHub token or another service:
+
+```text
+feat(api): expose protocol freshness metadata
+fix(ui): keep the period selector visible at high zoom
+docs(methodology): clarify incomplete-period coverage
+```
+
+`feat`, `fix`, and `docs` commits become the **Added**, **Fixed**, and
+**Documentation** sections. Merge commits and maintenance-only commit types are
+ignored. Entries retain oldest-first Git order and link to their exact commit,
+so the same range always produces the same Markdown.
+
+Preview a known range without changing a file:
+
+```bash
+npm run changelog:generate -- --from <base-sha-or-tag> --to <head-sha-or-tag>
+```
+
+Maintainers can update only the generated block under `Unreleased` after
+reviewing the preview:
+
+```bash
+npm run changelog:generate -- --from <last-release> --to HEAD --write
+npm run test:changelog
+```
+
+For a deterministic credential-free example, use the committed fixture:
+
+```bash
+npm run changelog:generate -- --fixture scripts/fixtures/changelog-commits.json
+```
+
+Do not hand-edit text between the generated markers. Curated release summaries
+outside those markers remain untouched.
 
 ---
 
