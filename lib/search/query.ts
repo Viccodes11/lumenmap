@@ -1,3 +1,4 @@
+import { fuzzyMatchWord, maxTypoDistance } from "@/lib/search/fuzzy";
 import {
   SEARCH_RESULT_TYPE_LABELS,
   SEARCH_RESULT_TYPE_ORDER,
@@ -9,7 +10,34 @@ import {
 
 const DEFAULT_LIMIT = 40;
 
-function toResult(entry: SearchIndexEntry): SearchResult {
+/**
+ * Character ranges within `label` to highlight for `folded` (the
+ * lower-cased query). Tries the same exact/prefix/substring tiers
+ * `scoreEntry` does (cheap and precise), then falls back to a
+ * whole-word highlight for a typo match — edit-distance alignment does
+ * not correspond to a single contiguous span, so a typo match highlights
+ * the whole matched word rather than claiming more precision than it has.
+ */
+function matchLabelSpans(label: string, folded: string): Array<[number, number]> | undefined {
+  if (!folded) return undefined;
+  const foldedLabel = label.toLowerCase();
+
+  if (foldedLabel === folded) return [[0, label.length]];
+  if (foldedLabel.startsWith(folded)) return [[0, folded.length]];
+
+  const index = foldedLabel.indexOf(folded);
+  if (index >= 0) return [[index, index + folded.length]];
+
+  const fuzzy = fuzzyMatchWord(foldedLabel, folded);
+  if (fuzzy) {
+    const wordIndex = foldedLabel.indexOf(fuzzy.word);
+    if (wordIndex >= 0) return [[wordIndex, wordIndex + fuzzy.word.length]];
+  }
+
+  return undefined;
+}
+
+function toResult(entry: SearchIndexEntry, folded: string): SearchResult {
   return {
     key: entry.key,
     type: entry.type,
@@ -23,6 +51,7 @@ function toResult(entry: SearchIndexEntry): SearchResult {
     opCount: entry.opCount,
     treemapView: entry.treemapView,
     nodeType: entry.nodeType,
+    labelMatchSpans: matchLabelSpans(entry.label, folded),
   };
 }
 
@@ -75,6 +104,26 @@ function scoreEntry(entry: SearchIndexEntry, rawQuery: string, folded: string): 
     return 300;
   }
 
+  // Typo-tolerant fallback, lowest-priority tier — only reached once every
+  // exact/prefix/substring check above has failed. Closer matches (smaller
+  // edit distance relative to what's tolerated) score higher within this
+  // band, but always below a real substring match.
+  const tolerance = maxTypoDistance(folded.length);
+  if (tolerance > 0) {
+    for (const term of entry.terms) {
+      const fuzzy = fuzzyMatchWord(term, folded);
+      if (fuzzy) {
+        return 150 + (tolerance - fuzzy.distance) * 20;
+      }
+    }
+    if (entry.protocol) {
+      const fuzzy = fuzzyMatchWord(entry.protocol.toLowerCase(), folded);
+      if (fuzzy) {
+        return 140 + (tolerance - fuzzy.distance) * 20;
+      }
+    }
+  }
+
   return 0;
 }
 
@@ -112,7 +161,7 @@ export function searchIndex(
       return a.entry.key.localeCompare(b.entry.key);
     })
     .slice(0, limit)
-    .map((row) => toResult(row.entry));
+    .map((row) => toResult(row.entry, folded));
 
   const byType = new Map<SearchResult["type"], SearchResult[]>();
   for (const result of ranked) {
