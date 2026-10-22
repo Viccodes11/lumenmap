@@ -47,13 +47,13 @@ export interface SearchResult {
   treemapView: TreemapViewId;
   /** Meta type mirrored onto SelectedNode when opening context. */
   nodeType: TreemapNodeType;
-  /** Character ranges to highlight in the displayed label and subtitle. */
-  highlights?: { label: MatchSpan[]; subtitle: MatchSpan[] };
-}
-
-export interface MatchSpan {
-  start: number;
-  end: number;
+  /**
+   * Character ranges within `label` (as `[start, end)` pairs) to
+   * highlight as the matched portion. Omitted when the match came from a
+   * different field (protocol, subtitle, asset code) with nothing in
+   * `label` itself to highlight, or when no match tier applies to it.
+   */
+  labelMatchSpans?: Array<[number, number]>;
 }
 
 export interface SearchIndexEntry extends SearchResult {

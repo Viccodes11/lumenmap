@@ -4,7 +4,7 @@ import { buildSearchIndex, extractAssetCode } from "@/lib/search/build-index";
 import { searchIndex } from "@/lib/search/query";
 import { findTreemapPath } from "@/lib/search/find-path";
 import { createSearchFixtures } from "@/lib/search/fixtures";
-import type { SearchResult } from "@/lib/search/types";
+import type { SearchIndexEntry, SearchResult } from "@/lib/search/types";
 
 const data = createSearchFixtures();
 const index = buildSearchIndex(data);
@@ -168,6 +168,114 @@ describe("searchIndex", () => {
   it("returns empty groups for blank queries", () => {
     const empty = searchIndex(index, "   ");
     assert.equal(empty.total, 0);
+  });
+});
+
+describe("searchIndex — typo-tolerant fuzzy ranking", () => {
+  it("finds a protocol name with a doubled letter typo", () => {
+    const results = flatResults("Krakken");
+    assert.ok(results.some((r) => r.label === "Kraken"));
+  });
+
+  it("finds a protocol name with a transposed-letter typo", () => {
+    const results = flatResults("Karken");
+    assert.ok(results.some((r) => r.label === "Kraken"));
+  });
+
+  it("finds a longer protocol name with a missing letter", () => {
+    const results = flatResults("Sorswap");
+    assert.ok(results.some((r) => r.label === "Soroswap"));
+  });
+
+  it("ranks an exact match above a fuzzy match for a different entry", () => {
+    // "Kraken" is both an exact label match and, by construction, close
+    // enough to fuzzy-match other entries too — the exact hit must win.
+    const results = flatResults("Kraken");
+    assert.equal(results[0]?.label, "Kraken");
+  });
+
+  it("still exact-matches a pasted address first, never fuzzy-ranked below it", () => {
+    const id = "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM";
+    const results = flatResults(id);
+    assert.equal(results[0]?.id, id);
+  });
+
+  it("does not fuzzy-match unrelated short queries", () => {
+    // "pool" differs from "poll" by one edit, but is only 4 characters —
+    // real typo tolerance should not turn every short word into noise.
+    const results = flatResults("pool");
+    for (const result of results) {
+      assert.ok(
+        result.label.toLowerCase().includes("pool") ||
+          result.subtitle?.toLowerCase().includes("pool") ||
+          result.category?.toLowerCase().includes("pool"),
+      );
+    }
+  });
+
+  it("highlights the matched word in the label for a typo match", () => {
+    const results = flatResults("Krakken");
+    const kraken = results.find((r) => r.label === "Kraken");
+    assert.ok(kraken?.labelMatchSpans);
+    const [start, end] = kraken!.labelMatchSpans![0];
+    assert.equal(kraken!.label.slice(start, end).toLowerCase(), "kraken");
+  });
+
+  it("highlights a precise substring span for a non-fuzzy match", () => {
+    const results = flatResults("krak");
+    const kraken = results.find((r) => r.label === "Kraken");
+    assert.deepEqual(kraken?.labelMatchSpans, [[0, 4]]);
+  });
+
+  it("returns no results for a query too different from anything indexed", () => {
+    const results = flatResults("zzzqqqxxx999");
+    assert.equal(results.length, 0);
+  });
+});
+
+describe("searchIndex — performance smoke on registry size", () => {
+  function syntheticEntry(i: number): SearchIndexEntry {
+    // Each label/term is unique (not a shared word plus a number), so a
+    // typo'd query can only be close enough to fuzzy-match *one* specific
+    // entry — while still forcing every other entry through the full
+    // fuzzy fallback (same length, no exact/prefix/substring hit).
+    const word = `zephyrion${i}`;
+    return {
+      key: `synthetic-${i}`,
+      type: "contract",
+      label: `Zephyrion${i}`,
+      treemapView: "events",
+      nodeType: "contract",
+      exactIds: [`C${i.toString().padStart(55, "0")}`],
+      terms: [word],
+    };
+  }
+
+  const largeIndex: SearchIndexEntry[] = Array.from({ length: 3000 }, (_, i) => syntheticEntry(i));
+
+  it("stays fast even when a typo-tolerant query falls through to the fuzzy tier for every entry", () => {
+    // One substitution typo against entry 1500's term specifically; every
+    // other one of the 3000 entries still has to run (and fail) the fuzzy
+    // fallback — close to the worst case the debounced UI caller exists
+    // to protect against.
+    const started = performance.now();
+    const result = searchIndex(largeIndex, "zephyrian1500");
+    const elapsedMs = performance.now() - started;
+
+    assert.ok(result.total > 0, "expected the typo'd query to still find its target entry");
+    assert.ok(result.groups.some((group) => group.results.some((r) => r.label === "Zephyrion1500")));
+    // Generous bound — this is a smoke test against runaway complexity
+    // (e.g. an accidental O(n^2) regression), not a strict perf budget.
+    assert.ok(elapsedMs < 500, `searchIndex over 3000 entries took ${elapsedMs}ms, expected < 500ms`);
+  });
+
+  it("stays fast for a query with no match at all (every entry reaches the fuzzy fallback and fails)", () => {
+    const started = performance.now();
+    const result = searchIndex(largeIndex, "zzzzzzzzzzzzzzzzzzzz");
+    const elapsedMs = performance.now() - started;
+
+    assert.equal(result.total, 0);
+    assert.ok(elapsedMs < 500, `searchIndex over 3000 entries took ${elapsedMs}ms, expected < 500ms`);
   });
 });
 
