@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useDashboard } from "@/components/dashboard/DashboardProvider";
 import { Button } from "@/components/ui/button";
+import { NOTES_UPDATED_EVENT, hasNote, readNotesFromStorage, type EntityNote } from "@/lib/notes";
 import { formatActivityDelta, resolveWatchlistBadge } from "@/lib/watchlist-delta";
 import { clearImportedEntries, importWatchlistText, type ImportSkip } from "@/lib/watchlist-import";
 import {
@@ -20,21 +21,26 @@ import { findResearchNote } from "@/lib/research-notes";
 import { useResearchNotes } from "@/components/dashboard/useResearchNotes";
 
 export function WatchlistPanel() {
-  const { data, period, network, flowViewEnabled, focusWatchedEntity } = useDashboard();
-  const notes = useResearchNotes();
+  const { data, period, flowViewEnabled, focusWatchedEntity, network } = useDashboard();
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [address, setAddress] = useState("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
-  const [importStatus, setImportStatus] = useState("");
-  const [skipped, setSkipped] = useState<ImportSkip[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [notes, setNotes] = useState<EntityNote[]>([]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEntries(readWatchlistFromStorage());
     setReady(true);
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNotes(readNotesFromStorage());
+    const onNotesUpdated = () => setNotes(readNotesFromStorage());
+    window.addEventListener(NOTES_UPDATED_EVENT, onNotesUpdated);
+    return () => window.removeEventListener(NOTES_UPDATED_EVENT, onNotesUpdated);
   }, []);
 
   useEffect(() => {
@@ -266,10 +272,14 @@ export function WatchlistPanel() {
                     })
                   }
                 >
-                  <span className="block truncate text-sm text-zinc-100">
-                    {entry.label}
-                    {findResearchNote(notes, entry.address, network) ? (
-                      <span className="ml-2 text-xs text-stellar-light" aria-label="Has research note">● Note</span>
+                  <span className="flex items-center gap-1.5 truncate text-sm text-zinc-100">
+                    <span className="truncate">{entry.label}</span>
+                    {hasNote(notes, entry.address, network) ? (
+                      <span
+                        aria-label="Has a research note"
+                        title="Has a research note"
+                        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-stellar"
+                      />
                     ) : null}
                   </span>
                   <span className="mt-0.5 block truncate font-mono text-[11px] text-zinc-500">
