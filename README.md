@@ -455,6 +455,29 @@ Unauthenticated `/api/v1/*` routes are rate-limited per client IP (from `X-Forwa
 | `RATE_LIMIT_HEALTH_WINDOW_MS` | `60000` | Health window length |
 | `RATE_LIMIT_DISABLED` | unset | Set to `true` to disable enforcement locally |
 
+#### Handling 429s as a client
+
+This server always sends `Retry-After` as delta-seconds (e.g. `30`), but
+per [RFC 9110 §10.2.3](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3)
+the header may also be an HTTP-date (e.g. `Wed, 21 Oct 2015 07:28:00 GMT`).
+A well-behaved client should tolerate both forms rather than assuming a
+specific server's current behavior — `lib/http/retry-after.ts` exports a
+`parseRetryAfter`/`retryAfterFromResponse` helper that does this.
+
+```ts
+import { retryAfterFromResponse } from "@/lib/http/retry-after";
+
+async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(url, init);
+  if (response.status !== 429) return response;
+
+  const { delayMs } = retryAfterFromResponse(response);
+  // Fall back to a fixed delay when the header was missing or unparseable.
+  await new Promise((resolve) => setTimeout(resolve, delayMs || 1000));
+  return fetch(url, init);
+}
+```
+
 ### Shared error responses
 
 Both versioned activity surfaces use the same validation and safe provider
