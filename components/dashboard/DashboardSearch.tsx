@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Loader2, Search, X } from "lucide-react";
 import { useDashboard } from "@/components/dashboard/DashboardProvider";
 import { Badge } from "@/components/ui/badge";
@@ -30,31 +30,49 @@ function resultTypeBadge(type: SearchResult["type"]): string {
   }
 }
 
-function highlightedText(text: string, spans: MatchSpan[]) {
-  if (spans.length === 0) return text;
-  const pieces: React.ReactNode[] = [];
+/** Highlights `spans` within `label` (as returned on `SearchResult.labelMatchSpans`). */
+function HighlightedLabel({ label, spans }: { label: string; spans?: Array<[number, number]> }) {
+  if (!spans || spans.length === 0) {
+    return <>{label}</>;
+  }
+
+  const nodes: ReactNode[] = [];
   let cursor = 0;
-  for (const { start, end } of spans) {
-    pieces.push(text.slice(cursor, start));
-    pieces.push(
-      <mark key={start} className="rounded-sm bg-stellar/25 text-inherit">
-        {text.slice(start, end)}
+  spans.forEach(([start, end], i) => {
+    if (start > cursor) {
+      nodes.push(label.slice(cursor, start));
+    }
+    nodes.push(
+      <mark key={i} className="rounded bg-stellar/30 text-inherit">
+        {label.slice(start, end)}
       </mark>,
     );
     cursor = end;
+  });
+  if (cursor < label.length) {
+    nodes.push(label.slice(cursor));
   }
-  pieces.push(text.slice(cursor));
-  return pieces;
+  return <>{nodes}</>;
 }
+
+/**
+ * How long to wait after the last keystroke before re-running the search.
+ * The search itself is synchronous (an in-memory index, no network), so
+ * this isn't masking request latency — it exists purely so a fast typist
+ * doesn't re-run the (now typo-tolerant, and therefore pricier) ranking on
+ * every single keystroke against the full registry.
+ */
+export const SEARCH_DEBOUNCE_MS = 150;
 
 export function DashboardSearch() {
   const {
     data,
     isLoading,
-    searchQuery,
+    searchQuery: rawSearchQuery,
     setSearchQuery,
     selectSearchResult,
   } = useDashboard();
+  const searchQuery = rawSearchQuery ?? "";
   const inputId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -67,13 +85,15 @@ export function DashboardSearch() {
     [data],
   );
 
+  // Debounced so a fast typist doesn't re-run ranking on every keystroke.
+  // The cleanup clears a still-pending timer whenever the query changes
+  // again first — the nearest thing to "cancel" a synchronous computation
+  // that never actually started.
   useEffect(() => {
-    // Search is local: cancel the pending calculation when the query changes.
-    const timer = window.setTimeout(() => setDebouncedQuery(searchQuery), 150);
-    return () => window.clearTimeout(timer);
+    const handle = setTimeout(() => setDebouncedQuery(searchQuery), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
   }, [searchQuery]);
 
-  const pending = debouncedQuery !== searchQuery;
   const results = useMemo(
     () => searchIndex(index, debouncedQuery),
     [index, debouncedQuery],
@@ -294,7 +314,7 @@ export function DashboardSearch() {
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="truncate text-sm font-medium">
-                                  {highlightedText(result.label, result.highlights?.label ?? [])}
+                                  <HighlightedLabel label={result.label} spans={result.labelMatchSpans} />
                                 </span>
                                 <Badge variant="secondary" className="shrink-0">
                                   {resultTypeBadge(result.type)}
