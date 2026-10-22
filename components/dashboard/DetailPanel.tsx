@@ -12,6 +12,8 @@ import { useDashboard } from "@/components/dashboard/DashboardProvider";
 import { isEligibleAddress } from "@/lib/clipboard";
 import { buildContractFunctionBreakdown } from "@/lib/entities/contract-function-breakdown";
 import { ContractFunctionBarChart } from "@/components/dashboard/ContractFunctionBarChart";
+import { ResearchNoteEditor } from "@/components/dashboard/ResearchNoteEditor";
+import { resolveWatchlistKind } from "@/lib/watchlist";
 import { getMetricUnit } from "@/lib/metrics/units";
 import { formatNumber, formatPercent } from "@/lib/utils";
 
@@ -22,6 +24,7 @@ export function DetailPanel({ onViewFlow }: { onViewFlow?: (account: string) => 
     data,
     metric,
     isLoading,
+    network,
     setTreemapView,
     setActiveLevelPath,
   } = useDashboard();
@@ -211,6 +214,10 @@ export function DetailPanel({ onViewFlow }: { onViewFlow?: (account: string) => 
               </Button>
             )}
           </div>
+        ) : null}
+
+        {address && resolveWatchlistKind(address) ? (
+          <ResearchNoteEditor key={`${network}:${address}`} address={address} network={network} />
         ) : null}
 
         {selectedNode.meta?.eventType ? (
