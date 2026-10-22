@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppProviders } from "@/components/providers";
+import { IncidentBannerHost } from "@/components/IncidentBannerHost";
 import "./globals.css";
 
 const geistSans = { variable: "font-sans" };
@@ -23,6 +24,7 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-canvas text-foreground">
         <AppProviders>
+          <IncidentBannerHost />
           <main className="min-h-screen">{children}</main>
         </AppProviders>
       </body>
