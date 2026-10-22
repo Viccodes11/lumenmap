@@ -109,6 +109,17 @@ describe("dashboard URL state", () => {
     assert.equal(parseDashboardUrlSearch(search).comparePeriod, "7d");
   });
 
+  it("preserves an address comparison while changing the active period", () => {
+    const first = "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM";
+    const second = "GBKMNW2R7QZQF2ZDHBUXC3LKSRMURBPNBDD7N2TDRVSJTTHU3QFAARP2";
+    const search = writeDashboardUrlSearch({
+      period: "7d", metric: "ops", view: "events", path: [],
+      currentSearch: `?compare=${first},${second}`,
+    });
+    assert.equal(new URLSearchParams(search).get("compare"), `${first},${second}`);
+    assert.equal(parseDashboardUrlSearch(search).comparePeriod, undefined);
+  });
+
   it("parses and writes flow mode from URL", () => {
     const parsed = parseDashboardUrlSearch("?flowMode=table");
     assert.equal(parsed.flowMode, "table");

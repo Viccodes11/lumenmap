@@ -168,7 +168,7 @@ export function writeDashboardUrlSearch(input: {
     params.delete("network");
   }
   if (input.comparePeriod) params.set("compare", input.comparePeriod);
-  else params.delete("compare");
+  else if (!params.get("compare")?.includes(",")) params.delete("compare");
   if (input.searchQuery) params.set("q", input.searchQuery);
   else params.delete("q");
 
