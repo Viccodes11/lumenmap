@@ -33,4 +33,19 @@ describe("OpenAPI document", () => {
       openApiDocument.components.schemas.Period.enum;
     assert.deepEqual([...enumValues].sort(), ["1d", "30d", "7d", "month"]);
   });
+
+  it("documents rate-limit headers on throttled routes", () => {
+    const throttledResponses = [
+      openApiDocument.paths["/api/v1/activity"].get.responses["429"],
+      openApiDocument.paths["/api/v1/flow"].get.responses["429"],
+      openApiDocument.paths["/api/v1/timeseries"].get.responses["429"],
+      openApiDocument.paths["/api/v1/protocols/health"].get.responses["429"],
+      openApiDocument.paths["/api/health"].get.responses["429"],
+    ];
+    for (const response of throttledResponses) {
+      assert.ok(response.headers["Retry-After"]);
+      assert.ok(response.headers["X-RateLimit-Limit"]);
+      assert.ok(response.headers["X-RateLimit-Remaining"]);
+    }
+  });
 });

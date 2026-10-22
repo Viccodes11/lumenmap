@@ -1,3 +1,26 @@
+const rateLimitResponse = {
+  description: "Rate limit exceeded. Wait at least Retry-After before retrying; use bounded retries with jitter.",
+  headers: {
+    "Retry-After": {
+      description: "Whole seconds until the rate-limit window resets; clients should also accept an HTTP-date.",
+      schema: { type: "integer", minimum: 1 },
+    },
+    "X-RateLimit-Limit": {
+      description: "Maximum requests allowed in this window.",
+      schema: { type: "integer", minimum: 1 },
+    },
+    "X-RateLimit-Remaining": {
+      description: "Requests remaining (0 on a 429 response).",
+      schema: { type: "integer", const: 0 },
+    },
+  },
+  content: {
+    "application/json": {
+      schema: { $ref: "#/components/schemas/RateLimitError" },
+    },
+  },
+} as const;
+
 /**
  * OpenAPI 3.1 description of public LumenMap HTTP routes.
  * Kept in sync with Zod validators under lib/schemas and route handlers.
@@ -8,7 +31,7 @@ export const openApiDocument = {
     title: "LumenMap Public API",
     version: "1.0.0",
     description:
-      "Machine-readable contracts for visualization activity, flow, timeseries, and health probes.",
+      "Machine-readable contracts for visualization activity, flow, timeseries, and health probes. Throttled responses include Retry-After, X-RateLimit-Limit, and X-RateLimit-Remaining; clients should wait before retrying a 429.",
     license: { name: "MIT" },
   },
   servers: [{ url: "/", description: "Current deployment" }],
@@ -84,20 +107,7 @@ export const openApiDocument = {
               },
             },
           },
-          "429": {
-            description: "Rate limit exceeded",
-            headers: {
-              "Retry-After": {
-                schema: { type: "integer" },
-                description: "Seconds until the client may retry",
-              },
-            },
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/RateLimitError" },
-              },
-            },
-          },
+          "429": rateLimitResponse,
           "500": {
             description: "Upstream or validation failure",
             content: {
@@ -121,7 +131,7 @@ export const openApiDocument = {
         responses: {
           "200": { description: "Flow graph", content: { "application/json": { schema: { $ref: "#/components/schemas/FlowResponse" } } } },
           "400": { description: "Invalid parameter", content: { "application/json": { schema: { $ref: "#/components/schemas/ApiError" } } } },
-          "429": { description: "Rate limit exceeded", content: { "application/json": { schema: { $ref: "#/components/schemas/RateLimitError" } } } },
+          "429": rateLimitResponse,
           "500": { description: "Flow provider failure", content: { "application/json": { schema: { $ref: "#/components/schemas/ApiError" } } } },
         },
       },
@@ -159,17 +169,7 @@ export const openApiDocument = {
               },
             },
           },
-          "429": {
-            description: "Rate limit exceeded",
-            headers: {
-              "Retry-After": { schema: { type: "integer" } },
-            },
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/RateLimitError" },
-              },
-            },
-          },
+          "429": rateLimitResponse,
         },
       },
     },
@@ -208,12 +208,7 @@ export const openApiDocument = {
               "application/json": { schema: { $ref: "#/components/schemas/ApiError" } },
             },
           },
-          "429": {
-            description: "Rate limit exceeded",
-            content: {
-              "application/json": { schema: { $ref: "#/components/schemas/RateLimitError" } },
-            },
-          },
+          "429": rateLimitResponse,
           "500": {
             description: "Upstream or validation failure",
             content: {
@@ -248,6 +243,7 @@ export const openApiDocument = {
               },
             },
           },
+          "429": rateLimitResponse,
           "503": {
             description: "Unavailable",
             content: {

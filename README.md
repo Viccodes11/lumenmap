@@ -445,7 +445,30 @@ is not transferred twice.
 
 ### Rate limiting
 
-Unauthenticated `/api/v1/*` routes are rate-limited per client IP (from `X-Forwarded-For` / `X-Real-IP`). Exceeded limits return `429` with a stable JSON body (`code: RATE_LIMITED`) and a `Retry-After` header.
+Unauthenticated `/api/v1/*` routes are rate-limited per client IP (from `X-Forwarded-For` / `X-Real-IP`). The `/api/health` probe has a separate, higher limit. Exceeded limits return `429` with a stable JSON body (`code: RATE_LIMITED`, `message`, and `retryAfterSeconds`). The response headers are `Retry-After` (whole seconds until the window resets), `X-RateLimit-Limit` (requests per window), and `X-RateLimit-Remaining` (`0` on a 429). These headers are sent on throttled responses; clients should not rely on them being present on successful responses.
+
+For a 429, wait at least the `Retry-After` delay before retrying. It may be a number of seconds or an HTTP date. Use a bounded retry count, add a little jitter to spread requests, and let the caller handle the final 429. The repository helper [`parseRetryAfter`](lib/http/rate-limit.ts) returns a delay in milliseconds or `null` for a missing or invalid header. This example retries an idempotent GET up to twice, using exponential backoff when the header is unavailable:
+
+```ts
+import { parseRetryAfter } from "./lib/http/rate-limit";
+
+async function getWithRateLimitRetry(url: string): Promise<Response> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(url);
+    if (response.status !== 429 || attempt === 2) return response;
+
+    const delayMs = parseRetryAfter(response.headers.get("Retry-After"))
+      ?? 1_000 * 2 ** attempt;
+    if (delayMs > 30_000) return response; // Let the caller schedule a later retry.
+
+    await response.body?.cancel();
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, delayMs + Math.random() * 250),
+    );
+  }
+  throw new Error("Unreachable: all attempts return a response");
+}
+```
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
