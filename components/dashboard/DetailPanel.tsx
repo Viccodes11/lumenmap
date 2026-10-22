@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyableAddress } from "@/components/dashboard/CopyableAddress";
+import { EntityNotes } from "@/components/dashboard/EntityNotes";
 import { StellarExpertLink } from "@/components/dashboard/StellarExpertLink";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboard } from "@/components/dashboard/DashboardProvider";
@@ -61,7 +62,6 @@ export function DetailPanel({ onViewFlow }: { onViewFlow?: (account: string) => 
     setTreemapView,
     setActiveLevelPath,
     network,
-    readOnly,
   } = useDashboard();
 
   useEffect(() => {
@@ -251,8 +251,8 @@ export function DetailPanel({ onViewFlow }: { onViewFlow?: (account: string) => 
           </div>
         ) : null}
 
-        {address && resolveWatchlistKind(address) ? (
-          <ResearchNoteEditor key={`${network}:${address}`} address={address} network={network} />
+        {address ? (
+          <EntityNotes key={`${network}:${address}`} address={address} network={network} />
         ) : null}
 
         {selectedNode.meta?.eventType ? (

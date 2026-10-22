@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useDashboard } from "@/components/dashboard/DashboardProvider";
 import { Button } from "@/components/ui/button";
-import { exportResearchNotesJson, readResearchNotesFromStorage } from "@/lib/research-notes";
+import { exportNotesJson, readNotesFromStorage } from "@/lib/notes";
 import {
   deleteSavedView,
   exportSavedViewsJson,
@@ -108,8 +108,8 @@ export function SavedViewsControls() {
     setStatus("Exported saved views JSON.");
   };
 
-  const handleNotesExport = () => {
-    const blob = new Blob([exportResearchNotesJson(readResearchNotesFromStorage())], {
+  const handleExportNotes = () => {
+    const blob = new Blob([exportNotesJson(readNotesFromStorage())], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -162,6 +162,9 @@ export function SavedViewsControls() {
           onClick={() => fileRef.current?.click()}
         >
           Import JSON
+        </Button>
+        <Button type="button" variant="outline" onClick={handleExportNotes}>
+          Export notes JSON
         </Button>
         <input
           ref={fileRef}
