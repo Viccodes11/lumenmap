@@ -16,9 +16,12 @@ import {
   type WatchlistEntry,
 } from "@/lib/watchlist";
 import { formatNumber } from "@/lib/utils";
+import { findResearchNote } from "@/lib/research-notes";
+import { useResearchNotes } from "@/components/dashboard/useResearchNotes";
 
 export function WatchlistPanel() {
-  const { data, period, flowViewEnabled, focusWatchedEntity } = useDashboard();
+  const { data, period, network, flowViewEnabled, focusWatchedEntity } = useDashboard();
+  const notes = useResearchNotes();
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [address, setAddress] = useState("");
   const [label, setLabel] = useState("");
@@ -265,6 +268,9 @@ export function WatchlistPanel() {
                 >
                   <span className="block truncate text-sm text-zinc-100">
                     {entry.label}
+                    {findResearchNote(notes, entry.address, network) ? (
+                      <span className="ml-2 text-xs text-stellar-light" aria-label="Has research note">● Note</span>
+                    ) : null}
                   </span>
                   <span className="mt-0.5 block truncate font-mono text-[11px] text-zinc-500">
                     {entry.kind} · {entry.address}
