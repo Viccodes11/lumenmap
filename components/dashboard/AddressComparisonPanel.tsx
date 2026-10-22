@@ -1,160 +1,215 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { useDashboard } from "@/components/dashboard/DashboardProvider";
 import { Button } from "@/components/ui/button";
 import {
-  compareCounterparties,
-  parseAddressComparisonParam,
-  validateAddressComparison,
-  type AddressComparisonPair,
-  type AddressProfile,
+  COMPARE_PARAM,
+  buildCompareParam,
+  computeCounterpartyOverlap,
+  parseCompareParam,
+  resolveComparisonEntity,
+  summarizeCategoryMix,
+  validateComparisonAddresses,
+  type CounterpartyOverlap,
+  type CategoryMixEntry,
+  type ResolvedComparisonEntity,
 } from "@/lib/address-comparison";
-import { isValidPeriod } from "@/lib/periods";
+import { buildEgoGraph } from "@/lib/flow-ego";
+import { buildSearchIndex } from "@/lib/search";
 import { formatNumber } from "@/lib/utils";
 
-type ComparisonResponse = { a: AddressProfile; b: AddressProfile };
+type ComparisonResult = {
+  a: ResolvedComparisonEntity;
+  b: ResolvedComparisonEntity;
+  overlap: CounterpartyOverlap | null;
+  categoryMixA: CategoryMixEntry[] | null;
+  categoryMixB: CategoryMixEntry[] | null;
+};
 
-async function fetchComparison(a: string, b: string, period: string, network: string): Promise<ComparisonResponse> {
-  const params = new URLSearchParams({ a, b, period, network });
-  const response = await fetch(`/api/v1/address-comparison?${params}`);
-  if (!response.ok) {
-    const body = await response.json() as { message?: string };
-    throw new Error(body.message ?? "Address comparison is unavailable.");
-  }
-  return response.json() as Promise<ComparisonResponse>;
+function updateCompareUrl(addressA: string, addressB: string) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.set(COMPARE_PARAM, buildCompareParam(addressA, addressB));
+  window.history.replaceState(window.history.state, "", url.toString());
 }
 
-function ProfileColumn({ profile, title }: { profile: AddressProfile; title: string }) {
-  return (
-    <section className="min-w-0 rounded-lg border border-zinc-800 bg-black/20 p-4">
-      <h3 className="font-semibold text-white">{title}</h3>
-      <p className="mt-1 break-all font-mono text-xs text-zinc-400">{profile.address}</p>
-      <p className="mt-3 text-2xl font-semibold text-white">{formatNumber(profile.opCount)} <span className="text-sm font-normal text-zinc-400">operations</span></p>
-      <h4 className="mt-5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Operation category mix</h4>
-      {profile.categories.length === 0 ? <p className="mt-2 text-sm text-zinc-500">No operations found in this period.</p> : (
-        <ul className="mt-2 space-y-2">
-          {profile.categories.slice(0, 8).map((row) => (
-            <li key={row.name} className="flex items-center justify-between gap-3 text-sm">
-              <span className="min-w-0 break-words text-zinc-300">{row.name}</span>
-              <span className="shrink-0 font-mono text-zinc-100">{formatNumber(row.opCount)} ({Math.round(row.opCount / profile.opCount * 100)}%)</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <h4 className="mt-5 text-xs font-semibold uppercase tracking-wide text-zinc-400">Top payment counterparties</h4>
-      {profile.counterparties.length === 0 ? <p className="mt-2 text-sm text-zinc-500">No payment counterparties in the available data.</p> : (
-        <ul className="mt-2 space-y-2">
-          {profile.counterparties.map((row) => (
-            <li key={row.address} className="flex justify-between gap-2 text-xs">
-              <span className="min-w-0 truncate text-zinc-300" title={row.address}>{row.label}</span>
-              <span className="shrink-0 font-mono text-zinc-100">{formatNumber(row.opCount)} ops</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {profile.counterpartiesSampled ? <p className="mt-2 text-xs text-amber-200">Counterparties are sampled from the top 100 payment edges.</p> : null}
-    </section>
-  );
-}
-
+/**
+ * Side-by-side comparison of two addresses for the active period: each
+ * side's own type/category/op count (resolved from the already-loaded
+ * search index, the same path DashboardSearch and DetailPanel use) plus,
+ * when Flow is enabled, their counterparty overlap and category mix.
+ *
+ * Ego-graph edge data has no live source yet (see FlowEgoSection) — the
+ * overlap/category-mix rows render honestly as empty until the activity
+ * API starts exposing per-account payment edges, rather than fabricating
+ * a result. The counterparty-dependent rows are simply omitted entirely
+ * when Flow is disabled (the table-only fallback).
+ */
 export function AddressComparisonPanel() {
-  const { period, network, comparePeriod, setComparePeriod } = useDashboard();
-  const [first, setFirst] = useState("");
-  const [second, setSecond] = useState("");
-  const [pair, setPair] = useState<AddressComparisonPair | null>(null);
-  const [inputError, setInputError] = useState("");
+  const { data, flowViewEnabled } = useDashboard();
+  const [addressA, setAddressA] = useState("");
+  const [addressB, setAddressB] = useState("");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<ComparisonResult | null>(null);
 
-  useEffect(() => {
-    const raw = new URLSearchParams(window.location.search).get("compare");
-    if (!raw || isValidPeriod(raw)) return;
-    const parts = raw.split(",");
-    queueMicrotask(() => {
-      setFirst(parts[0] ?? "");
-      setSecond(parts[1] ?? "");
-      const parsed = parseAddressComparisonParam(raw);
-      if (parsed.ok) setPair(parsed.pair);
-      else setInputError(parsed.error);
-    });
-  }, []);
+  const index = useMemo(() => (data ? buildSearchIndex(data) : []), [data]);
 
-  useEffect(() => {
-    if (!comparePeriod) return;
-    queueMicrotask(() => {
-      setPair(null);
-      setFirst("");
-      setSecond("");
-      setInputError("");
-    });
-  }, [comparePeriod]);
+  const runComparison = (a: string, b: string, syncUrl: boolean) => {
+    const validation = validateComparisonAddresses(a, b);
+    if (!validation.ok) {
+      setError(validation.error);
+      setResult(null);
+      return;
+    }
 
-  const query = useQuery({
-    queryKey: ["address-comparison", pair?.[0], pair?.[1], period, network],
-    queryFn: () => fetchComparison(pair![0], pair![1], period, network),
-    enabled: pair !== null,
-    staleTime: 60_000,
-  });
+    const entityA = resolveComparisonEntity(index, a);
+    const entityB = resolveComparisonEntity(index, b);
 
-  const apply = () => {
-    const result = validateAddressComparison(first, second);
-    if (!result.ok) { setInputError(result.error); return; }
-    setInputError("");
-    setPair(result.pair);
-    setFirst(result.pair[0]);
-    setSecond(result.pair[1]);
-    setComparePeriod(null);
-    const params = new URLSearchParams(window.location.search);
-    params.set("compare", result.pair.join(","));
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}?${params}`);
+    let overlap: CounterpartyOverlap | null = null;
+    let categoryMixA: CategoryMixEntry[] | null = null;
+    let categoryMixB: CategoryMixEntry[] | null = null;
+    if (flowViewEnabled) {
+      // No live edge source yet (FlowEgoSection has the same limitation) —
+      // this computes correctly over whatever edges exist, which today is
+      // none, so the overlap/mix below are honestly empty rather than faked.
+      const graphA = buildEgoGraph(entityA.address, entityA.label, [], []); // (nodes, edges) — both empty until a live source exists
+      const graphB = buildEgoGraph(entityB.address, entityB.label, [], []);
+      overlap = computeCounterpartyOverlap(graphA.counterparties, graphB.counterparties);
+      categoryMixA = summarizeCategoryMix(graphA.counterparties);
+      categoryMixB = summarizeCategoryMix(graphB.counterparties);
+    }
+
+    setError("");
+    setResult({ a: entityA, b: entityB, overlap, categoryMixA, categoryMixB });
+    if (syncUrl) updateCompareUrl(a, b);
   };
 
-  const clear = () => {
-    setPair(null);
-    setFirst("");
-    setSecond("");
-    setInputError("");
+  useEffect(() => {
+    if (typeof window === "undefined" || !data) return;
     const params = new URLSearchParams(window.location.search);
-    params.delete("compare");
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}?${params}`);
-  };
+    const pair = parseCompareParam(params.get(COMPARE_PARAM));
+    if (!pair) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAddressA(pair[0]);
+    setAddressB(pair[1]);
+    runComparison(pair[0], pair[1], false);
+    // Only on first load once data is ready — further runs are user-driven.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(data)]);
 
-  const overlap = query.data ? compareCounterparties(query.data.a, query.data.b) : null;
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    runComparison(addressA, addressB, true);
+  };
 
   return (
     <section aria-label="Address comparison" className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-      <h2 className="text-base font-semibold text-white">Compare two addresses</h2>
-      <p className="mt-1 text-xs text-zinc-400">Operations and payment counterparties for the active {period} period on {network}. Works without Flow view.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="text-xs text-zinc-400">Address A
-          <input value={first} onChange={(event) => setFirst(event.target.value)} placeholder="G… or C…" spellCheck={false} className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm text-white" />
+      <h2 className="text-sm font-medium text-zinc-100">Compare two addresses</h2>
+      <p className="mt-1 text-xs text-zinc-500">
+        Side-by-side view for the active period.
+        {flowViewEnabled
+          ? " Counterparty overlap and category mix are included when Flow data is available."
+          : " Enable Flow for counterparty overlap; this view shows op count and category otherwise."}
+      </p>
+
+      <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+        <label className="min-w-0 flex-1 text-xs text-zinc-400" htmlFor="compare-address-a">
+          Address A
+          <input
+            id="compare-address-a"
+            value={addressA}
+            onChange={(event) => setAddressA(event.target.value)}
+            placeholder="G… or C…"
+            autoComplete="off"
+            spellCheck={false}
+            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-100"
+          />
         </label>
-        <label className="text-xs text-zinc-400">Address B
-          <input value={second} onChange={(event) => setSecond(event.target.value)} placeholder="G… or C…" spellCheck={false} className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm text-white" />
+        <label className="min-w-0 flex-1 text-xs text-zinc-400" htmlFor="compare-address-b">
+          Address B
+          <input
+            id="compare-address-b"
+            value={addressB}
+            onChange={(event) => setAddressB(event.target.value)}
+            placeholder="G… or C…"
+            autoComplete="off"
+            spellCheck={false}
+            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-100"
+          />
         </label>
-      </div>
-      <div className="mt-3 flex gap-2">
-        <Button type="button" size="sm" onClick={apply}>Compare addresses</Button>
-        {pair ? <Button type="button" size="sm" variant="outline" onClick={clear}>Clear comparison</Button> : null}
-      </div>
-      {inputError ? <p role="alert" className="mt-3 text-sm text-rose-300">{inputError}</p> : null}
-      {query.isPending && pair ? <p role="status" className="mt-4 text-sm text-zinc-400">Loading address comparison…</p> : null}
-      {query.error && pair ? <p role="alert" className="mt-4 text-sm text-rose-300">{query.error.message}</p> : null}
-      {query.data && pair ? (
-        <div className="mt-5 space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ProfileColumn profile={query.data.a} title="Address A" />
-            <ProfileColumn profile={query.data.b} title="Address B" />
-          </div>
-          <div className="rounded-lg border border-zinc-800 bg-black/20 p-4">
-            <h3 className="font-semibold text-white">Shared payment counterparties: {overlap?.shared.length ?? 0}</h3>
-            {overlap?.shared.length ? (
-              <ul className="mt-2 space-y-2 text-sm">
-                {overlap.shared.map((row) => <li key={row.address} className="flex flex-wrap justify-between gap-2 text-zinc-300"><span title={row.address}>{row.label}</span><span className="font-mono text-xs">A {formatNumber(row.aOps)} · B {formatNumber(row.bOps)} ops</span></li>)}
-              </ul>
-            ) : <p className="mt-2 text-sm text-zinc-400">No shared payment counterparties in the available data.</p>}
-            <p className="mt-3 text-xs text-zinc-500">Only A: {overlap?.aOnly.length ?? 0} · Only B: {overlap?.bOnly.length ?? 0}</p>
-          </div>
+        <Button type="submit">Compare</Button>
+      </form>
+
+      {error ? (
+        <p role="alert" className="mt-3 text-sm text-rose-300">
+          {error}
+        </p>
+      ) : null}
+
+      {result ? (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[480px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-left text-xs text-zinc-500">
+                <th scope="col" className="py-2 pr-3">
+                  Metric
+                </th>
+                <th scope="col" className="py-2 pr-3 font-mono">
+                  {result.a.label}
+                </th>
+                <th scope="col" className="py-2 pr-3 font-mono">
+                  {result.b.label}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-zinc-900">
+                <td className="py-2 pr-3 text-zinc-400">Found in loaded data</td>
+                <td className="py-2 pr-3">{result.a.found ? "Yes" : "No"}</td>
+                <td className="py-2 pr-3">{result.b.found ? "Yes" : "No"}</td>
+              </tr>
+              <tr className="border-b border-zinc-900">
+                <td className="py-2 pr-3 text-zinc-400">Type</td>
+                <td className="py-2 pr-3">{result.a.type ?? "—"}</td>
+                <td className="py-2 pr-3">{result.b.type ?? "—"}</td>
+              </tr>
+              <tr className="border-b border-zinc-900">
+                <td className="py-2 pr-3 text-zinc-400">Category</td>
+                <td className="py-2 pr-3">{result.a.category ?? "—"}</td>
+                <td className="py-2 pr-3">{result.b.category ?? "—"}</td>
+              </tr>
+              <tr className="border-b border-zinc-900">
+                <td className="py-2 pr-3 text-zinc-400">Op count</td>
+                <td className="py-2 pr-3">{result.a.opCount !== null ? formatNumber(result.a.opCount) : "—"}</td>
+                <td className="py-2 pr-3">{result.b.opCount !== null ? formatNumber(result.b.opCount) : "—"}</td>
+              </tr>
+              {result.overlap ? (
+                <tr className="border-b border-zinc-900">
+                  <td className="py-2 pr-3 text-zinc-400">Counterparty overlap</td>
+                  <td colSpan={2} className="py-2 pr-3">
+                    {result.overlap.overlapping.length} shared, {result.overlap.onlyA.length} only A,{" "}
+                    {result.overlap.onlyB.length} only B
+                  </td>
+                </tr>
+              ) : null}
+              {result.categoryMixA && result.categoryMixB ? (
+                <tr>
+                  <td className="py-2 pr-3 align-top text-zinc-400">Counterparty category mix</td>
+                  <td className="py-2 pr-3 align-top">
+                    {result.categoryMixA.length === 0
+                      ? "—"
+                      : result.categoryMixA.map((entry) => `${entry.category} (${Math.round(entry.percent)}%)`).join(", ")}
+                  </td>
+                  <td className="py-2 pr-3 align-top">
+                    {result.categoryMixB.length === 0
+                      ? "—"
+                      : result.categoryMixB.map((entry) => `${entry.category} (${Math.round(entry.percent)}%)`).join(", ")}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       ) : null}
     </section>

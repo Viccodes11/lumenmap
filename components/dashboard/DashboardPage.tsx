@@ -23,6 +23,7 @@ import { AssetVolumePanel } from "@/components/dashboard/AssetVolumePanel";
 import { SorobanFeePanel } from "@/components/dashboard/SorobanFeePanel";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { DashboardSearch } from "@/components/dashboard/DashboardSearch";
+import { AddressComparisonPanel } from "@/components/dashboard/AddressComparisonPanel";
 import { ComparisonPanel } from "@/components/dashboard/ComparisonPanel";
 import { AddressComparisonPanel } from "@/components/dashboard/AddressComparisonPanel";
 import { IssuerIntelligence } from "@/components/dashboard/IssuerIntelligence";
@@ -217,7 +218,12 @@ function DashboardContent() {
           {
             id: "comparisons",
             label: "Comparisons",
-            content: <ComparisonPanel />,
+            content: (
+              <div className="flex flex-col gap-6">
+                <ComparisonPanel />
+                <AddressComparisonPanel />
+              </div>
+            ),
           },
           {
             id: "soroban-fees",
