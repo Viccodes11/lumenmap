@@ -31,7 +31,10 @@ export const openApiDocument = {
     title: "LumenMap Public API",
     version: "1.0.0",
     description:
-      "Machine-readable contracts for visualization activity, flow, timeseries, and health probes. Throttled responses include Retry-After, X-RateLimit-Limit, and X-RateLimit-Remaining; clients should wait before retrying a 429.",
+      "Machine-readable contracts for visualization activity, flow, timeseries, and health probes. " +
+      "429 responses always set Retry-After in delta-seconds today, but clients should tolerate the " +
+      "HTTP-date form too (RFC 9110 §10.2.3) rather than assume this specific server's current " +
+      "behavior — see README's 'Handling 429s as a client' section.",
     license: { name: "MIT" },
   },
   servers: [{ url: "/", description: "Current deployment" }],
