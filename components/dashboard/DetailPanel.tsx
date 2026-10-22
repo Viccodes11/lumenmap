@@ -13,6 +13,8 @@ import { useDashboard } from "@/components/dashboard/DashboardProvider";
 import { isEligibleAddress } from "@/lib/clipboard";
 import { buildContractFunctionBreakdown } from "@/lib/entities/contract-function-breakdown";
 import { ContractFunctionBarChart } from "@/components/dashboard/ContractFunctionBarChart";
+import { ResearchNoteEditor } from "@/components/dashboard/ResearchNoteEditor";
+import { resolveWatchlistKind } from "@/lib/watchlist";
 import { getMetricUnit } from "@/lib/metrics/units";
 import { formatNumber, formatPercent } from "@/lib/utils";
 import { formatEntityAge, formatFirstSeen, type FirstSeenContext } from "@/lib/entities/first-seen";
@@ -55,6 +57,7 @@ export function DetailPanel({ onViewFlow }: { onViewFlow?: (account: string) => 
     data,
     metric,
     isLoading,
+    network,
     setTreemapView,
     setActiveLevelPath,
     network,
@@ -248,9 +251,8 @@ export function DetailPanel({ onViewFlow }: { onViewFlow?: (account: string) => 
           </div>
         ) : null}
 
-        {address && !readOnly &&
-        (selectedNode.meta?.type === "account" || selectedNode.meta?.type === "contract") ? (
-          <FirstSeenDetails id={address} type={selectedNode.meta.type} network={network} />
+        {address && resolveWatchlistKind(address) ? (
+          <ResearchNoteEditor key={`${network}:${address}`} address={address} network={network} />
         ) : null}
 
         {selectedNode.meta?.eventType ? (
